@@ -10,50 +10,4234 @@
     *, *:before, *:after { box-sizing: inherit; }
     body { margin: 0; background: #fafafa; }
     .topbar-wrapper .link::after { content: "v1.0.0"; margin-left: 8px; font-size: 12px; color: #fff; opacity: 0.7; }
-    #cors-warning { display: none; background: #fff3cd; border: 1px solid #ffc107; padding: 20px; margin: 40px auto; max-width: 600px; border-radius: 8px; font-family: monospace; }
     .mermaid { display: flex; justify-content: center; padding: 16px 0; }
     .mermaid svg { max-width: 100%; height: auto; }
   </style>
 </head>
 <body>
-  <div id="cors-warning">
-    <h3>CORS Restriction Detected</h3>
-    <p>Swagger UI cannot load the YAML file via <code>file://</code> protocol.</p>
-    <p><strong>Fix:</strong> Serve these files via a local HTTP server:</p>
-    <pre>cd "$(dirname "$0")"
-python3 -m http.server 8080</pre>
-    <p>Then open: <a href="http://localhost:8080">http://localhost:8080</a></p>
-  </div>
   <div id="swagger-ui"></div>
 
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
   <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
   <script>
+    const spec = {
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Patricia API",
+    "description": "Patricia Digital Out-of-Home (DOOH) Commercial Inventory Platform API.\n\nPatricia serves as the operational/device platform and source of truth for:\n- Location master data\n- Device inventory and capabilities\n- Campaign distribution and execution\n- Showtime scheduling\n- Rate card references\n- Slot inventory management\n- Health monitoring\n\n## Authentication\n\nAll API requests require HMAC-MD5 signature validation via KrakenD gateway plugin.\n\n### Signature Scheme\n```\nX-Signature = hex(HMAC-MD5(apiKey + secretKey + timestamp))\n```\n\n### Request Format\n\n#### GET Requests (query parameters)\n```\nGET /patricia/v1/endpoint?channel_id=G21&api_key=xxxx&x_timestamp=1716307200&x_signature=<hex-hmac>\n```\n\n#### POST/PUT/DELETE Requests (headers)\n```\nPOST /patricia/v1/endpoint\nHeaders:\n  ChannelId: G21\n  Api_key: xxxx\n  X-Timestamp: 1716307200\n  X-Signature: <hex-hmac>\n  Content-Type: application/json\n  Accept: application/json\n```\n\n### Header/Query Parameter Names\n\n| Purpose | Header | Query Param |\n|---------|--------|-------------|\n| Channel ID | `ChannelId` | `channel_id` |\n| API Key | `Api_key` | `api_key` |\n| Timestamp | `X-Timestamp` | `x_timestamp` |\n| Signature | `X-Signature` | `x_signature` |\n\n### Timestamp Format\nUnix epoch timestamp in seconds (e.g., `1716307200`). Clock skew tolerance: 300 seconds (5 minutes).\n\n### Error Responses\n\n| Scenario | HTTP Status | Response Body |\n|----------|-------------|---------------|\n| Missing required params | 400 | `{\"error\": \"missing channel_id\"}` |\n| Credential not found | 401 | `{\"error\": \"invalid credentials\"}` |\n| Timestamp expired | 401 | `{\"error\": \"request expired\"}` |\n| Signature mismatch | 401 | `{\"error\": \"invalid signature\"}` |\n| Endpoint not authorized | 403 | `{\"error\": \"endpoint not authorized\"}` |\n\n## Timestamp Standard\nAll business timestamps use ISO8601 UTC format: `2026-05-12T10:00:00Z`\nAuthentication timestamps use Unix epoch: `1716307200`\n\n## HTTP Status Convention\n| Status | Meaning |\n|--------|---------|\n| 200 | Success |\n| 202 | Accepted async processing |\n| 400 | Invalid payload |\n| 401 | Unauthorized |\n| 403 | Forbidden |\n| 404 | Resource not found |\n| 409 | Duplicate conflict |\n| 422 | Business validation failed |\n| 500 | Internal server error |\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Patricia API Support"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.patricia.co.id",
+      "description": "Production"
+    },
+    {
+      "url": "https://api.patricia.kubesnp.salt.id",
+      "description": "Staging"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Master Data",
+      "description": "Location hierarchy and master data (Patricia = Source of Truth)"
+    },
+    {
+      "name": "Organization",
+      "description": "Organization synchronization and product industry"
+    },
+    {
+      "name": "Device",
+      "description": "Device inventory, capabilities, and health"
+    },
+    {
+      "name": "Campaign",
+      "description": "Commercial campaign injection and management"
+    },
+    {
+      "name": "Showtime",
+      "description": "Showtime categories, schedules, and slots"
+    },
+    {
+      "name": "Rate Card",
+      "description": "Rate card pricing reference"
+    },
+    {
+      "name": "Inventory Slot",
+      "description": "Slot availability and booking"
+    },
+    {
+      "name": "Health",
+      "description": "System health and operational monitoring"
+    }
+  ],
+  "paths": {
+    "/master/v1/locations/hierarchy": {
+      "get": {
+        "tags": [
+          "Master Data"
+        ],
+        "summary": "Get full location hierarchy",
+        "description": "Retrieve the complete location hierarchy from Province to City level.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as LocationUseCase\n    participant Repo as LocationRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /master/v1/locations/hierarchy\n    API->>UseCase: GetLocationHierarchy()\n    UseCase->>Repo: GetFullHierarchy()\n    Repo->>PostgreSQL: SELECT hierarchical location data\n    PostgreSQL-->>Repo: location hierarchy\n    Repo-->>UseCase: LocationHierarchy\n    UseCase-->>API: LocationHierarchyResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getLocationHierarchy",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationHierarchyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/master/v1/locations": {
+      "get": {
+        "tags": [
+          "Master Data"
+        ],
+        "summary": "Get flat list of locations",
+        "description": "Retrieve a flat list of all locations.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as LocationUseCase\n    participant Repo as LocationRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /master/v1/locations\n    API->>UseCase: GetLocationsList()\n    UseCase->>Repo: GetFlatLocations()\n    Repo->>PostgreSQL: SELECT flat location data\n    PostgreSQL-->>Repo: locations list\n    Repo-->>UseCase: []Location\n    UseCase-->>API: LocationsListResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getLocations",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter by location type (PROVINCE, CITY)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PROVINCE",
+                "CITY"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/master/v1/locations/{location_id}": {
+      "get": {
+        "tags": [
+          "Master Data"
+        ],
+        "summary": "Get location details",
+        "description": "Retrieve details of a specific location.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as LocationUseCase\n    participant Repo as LocationRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /master/v1/locations/{location_id}\n    API->>UseCase: GetLocationById(locationId)\n    UseCase->>Repo: FindById(locationId)\n    Repo->>PostgreSQL: SELECT WHERE location_id = ?\n    PostgreSQL-->>Repo: location or null\n    Repo-->>UseCase: Location or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: LocationResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getLocationById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the location",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/master/v1/locations/changes": {
+      "get": {
+        "tags": [
+          "Master Data"
+        ],
+        "summary": "Get incremental location changes",
+        "description": "Retrieve incremental sync of location changes since a specific timestamp.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as LocationUseCase\n    participant Repo as LocationRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /master/v1/locations/changes?updated_after=\n    API->>UseCase: GetChangedLocations(updatedAfter)\n    UseCase->>Repo: FindChanges(updatedAfter)\n    Repo->>PostgreSQL: SELECT with timestamp filter\n    PostgreSQL-->>Repo: changed locations\n    Repo-->>UseCase: []LocationChange\n    UseCase-->>API: LocationChangesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getLocationChanges",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "updated_after",
+            "in": "query",
+            "required": true,
+            "description": "ISO8601 timestamp to get changes after",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-05-12T10:00:00Z"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationChangesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/master/v1/locations/validate": {
+      "post": {
+        "tags": [
+          "Master Data"
+        ],
+        "summary": "Validate locations",
+        "description": "Validate a list of location IDs before creating a campaign.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as LocationUseCase\n    participant Repo as LocationRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /master/v1/locations/validate\n    API->>UseCase: ValidateLocations(locationIds)\n    UseCase->>Repo: ValidateIds(locationIds)\n    Repo->>PostgreSQL: SELECT WHERE location_id IN (?)\n    PostgreSQL-->>Repo: existing locations\n    Repo-->>UseCase: validation results\n    UseCase-->>API: LocationValidationResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "validateLocations",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationValidationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/organizations/v1/sync": {
+      "post": {
+        "tags": [
+          "Organization"
+        ],
+        "summary": "Sync organization",
+        "description": "Synchronize a new organization from Patricia to consumer systems.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as OrganizationUseCase\n    participant Repo as OrganizationRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /organizations/v1/sync\n    API->>UseCase: SyncOrganization(orgData)\n    UseCase->>Repo: CreateOrUpdate(orgData)\n    Repo->>PostgreSQL: INSERT/UPDATE organization\n    PostgreSQL-->>Repo: success/failure\n    Repo-->>UseCase: operation result\n    UseCase-->>API: OrganizationSyncResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "syncOrganization",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationSyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSyncResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/organizations/v1/{organization_id}": {
+      "get": {
+        "tags": [
+          "Organization"
+        ],
+        "summary": "Get organization details",
+        "description": "Retrieve details of a specific organization.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as OrganizationUseCase\n    participant Repo as OrganizationRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /organizations/v1/{organization_id}\n    API->>UseCase: GetOrganizationById(orgId)\n    UseCase->>Repo: FindById(orgId)\n    Repo->>PostgreSQL: SELECT WHERE org_id = ?\n    PostgreSQL-->>Repo: organization or null\n    Repo-->>UseCase: Organization or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: OrganizationResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getOrganizationById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the organization",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/organizations/v1/product-industry": {
+      "get": {
+        "tags": [
+          "Organization"
+        ],
+        "summary": "Get product industry master",
+        "description": "Retrieve the 4-level product industry hierarchy (Industry -> Category -> Sub-Category -> Product).",
+        "operationId": "getProductIndustry",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductIndustryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/devices/v1/sync": {
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Sync device",
+        "description": "Synchronize a new device after pairing is completed.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as DeviceUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /devices/v1/sync\n    API->>UseCase: SyncDevice(deviceData)\n    UseCase->>Repo: CreateOrUpdate(deviceData)\n    Repo->>PostgreSQL: INSERT/UPDATE device\n    PostgreSQL-->>Repo: success/failure\n    Repo-->>UseCase: operation result\n    UseCase-->>API: DeviceSyncResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "syncDevice",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceSyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/devices/v1/availability": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Get device availability",
+        "description": "Retrieve available devices for commercial inventory.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as DeviceUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /devices/v1/availability\n    API->>UseCase: GetDeviceAvailability()\n    UseCase->>Repo: GetAvailabilityStats()\n    Repo->>PostgreSQL: SELECT availability counts\n    PostgreSQL-->>Repo: availability stats\n    Repo-->>UseCase: AvailabilityStats\n    UseCase-->>API: DeviceAvailabilityResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getDeviceAvailability",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "query",
+            "description": "Filter by location ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organization_id",
+            "in": "query",
+            "description": "Filter by organization ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by device status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ONLINE",
+                "OFFLINE",
+                "ALL"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/devices/v1/health-check": {
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Bulk device health check",
+        "description": "Check online/offline status of multiple devices in bulk.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as DeviceUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /devices/v1/health-check\n    API->>UseCase: CheckDeviceHealth(deviceIds)\n    UseCase->>Repo: GetHealthStatus(deviceIds)\n    Repo->>PostgreSQL: SELECT health status for devices\n    PostgreSQL-->>Repo: health status data\n    Repo-->>UseCase: []DeviceHealth\n    UseCase-->>API: DeviceHealthResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "bulkDeviceHealthCheck",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceHealthCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceHealthCheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/devices/v1/capabilities": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Get device capabilities",
+        "description": "Retrieve information about device capabilities.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as DeviceUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /devices/v1/capabilities\n    API->>UseCase: GetDeviceCapabilities()\n    UseCase->>Repo: GetAllCapabilities()\n    Repo->>PostgreSQL: SELECT all capabilities\n    PostgreSQL-->>Repo: capabilities list\n    Repo-->>UseCase: []Capability\n    UseCase-->>API: CapabilitiesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getDeviceCapabilities",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "description": "Filter by specific device ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/devices/v1/{device_id}": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Get device details",
+        "description": "Retrieve details of a specific device.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as DeviceUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /devices/v1/{device_id}\n    API->>UseCase: GetDeviceById(deviceId)\n    UseCase->>Repo: FindById(deviceId)\n    Repo->>PostgreSQL: SELECT WHERE device_id = ?\n    PostgreSQL-->>Repo: device or null\n    Repo-->>UseCase: Device or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: DeviceResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getDeviceById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the device",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/commercial": {
+      "post": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Create commercial campaign",
+        "description": "Inject a commercial campaign from consumer system to Patricia.\n\nCampaign injection SUCCESS = Patricia accepted request + campaign persisted + MQTT distributed.\n\nRequires HMAC-MD5 signature validation via KrakenD gateway.\n\n```mermaid\nsequenceDiagram\n    actor Gen21 as Gen21\n    participant API as API Handler\n    participant UseCase as CampaignUseCase\n    participant Repo as CampaignRepository\n    participant MQTT as MQTTService\n    participant PostgreSQL as Database\n    Gen21->>API: POST /campaigns/v1/commercial\n    API->>UseCase: CreateCampaign(campaignData)\n    UseCase->>Repo: Create(campaignData)\n    Repo->>PostgreSQL: INSERT campaign\n    PostgreSQL-->>Repo: campaign created\n    Repo-->>UseCase: Campaign\n    UseCase->>MQTT: PublishDistributionCommand(campaign)\n    MQTT-->>UseCase: publish result\n    UseCase-->>API: CampaignCreateResponse\n    API-->>Gen21: 200 OK (campaign accepted, no pricing)\n```",
+        "operationId": "createCommercialCampaign",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCampaignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Campaign accepted for async processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCampaignResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/commercial/{campaign_id}": {
+      "put": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Update commercial campaign",
+        "description": "Update an existing commercial campaign.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as CampaignUseCase\n    participant Repo as CampaignRepository\n    participant PostgreSQL as Database\n    Client->>API: PUT /campaigns/v1/commercial/{campaign_id}\n    API->>UseCase: UpdateCampaign(campaignId, updateData)\n    UseCase->>Repo: FindById(campaignId)\n    Repo->>PostgreSQL: SELECT WHERE campaign_id = ?\n    PostgreSQL-->>Repo: campaign or null\n    Repo-->>UseCase: Campaign or nil\n    UseCase->>UseCase: Check if found\n    UseCase->>Repo: Update(campaign)\n    Repo->>PostgreSQL: UPDATE campaign\n    PostgreSQL-->>Repo: update result\n    Repo-->>UseCase: updated campaign\n    UseCase-->>API: CampaignUpdateResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "updateCommercialCampaign",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "description": "Patricia campaign ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCampaignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campaign updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCampaignResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/commercial/{campaign_id}/cancel": {
+      "post": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Cancel commercial campaign",
+        "description": "Cancel an existing commercial campaign. This is an irreversible action.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as CampaignUseCase\n    participant Repo as CampaignRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /campaigns/v1/commercial/{campaign_id}/cancel\n    API->>UseCase: CancelCampaign(campaignId)\n    UseCase->>Repo: FindById(campaignId)\n    Repo->>PostgreSQL: SELECT WHERE campaign_id = ?\n    PostgreSQL-->>Repo: campaign or null\n    Repo-->>UseCase: Campaign or nil\n    UseCase->>UseCase: Check if found and cancellable\n    UseCase->>Repo: UpdateStatus(campaignId, CANCELLED)\n    Repo->>PostgreSQL: UPDATE campaign status\n    PostgreSQL-->>Repo: update result\n    Repo-->>UseCase: success\n    UseCase-->>API: CampaignCancelResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "cancelCommercialCampaign",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "description": "Patricia campaign ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Reason for cancellation",
+                    "example": "Client requested cancellation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campaign cancelled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelCampaignResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/commercial/{campaign_id}/status": {
+      "get": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Get campaign status",
+        "description": "Check the distribution status of a campaign.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as CampaignUseCase\n    participant Repo as CampaignRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /campaigns/v1/commercial/{campaign_id}/status\n    API->>UseCase: GetCampaignStatus(campaignId)\n    UseCase->>Repo: FindById(campaignId)\n    Repo->>PostgreSQL: SELECT WHERE campaign_id = ?\n    PostgreSQL-->>Repo: campaign or null\n    Repo-->>UseCase: Campaign or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: CampaignStatusResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getCampaignStatus",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "description": "Patricia campaign ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/commercial/status/bulk": {
+      "post": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Bulk campaign status check",
+        "description": "Check the status of multiple campaigns in bulk.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as CampaignUseCase\n    participant Repo as CampaignRepository\n    participant PostgreSQL as Database\n    Client->>API: POST /campaigns/v1/commercial/status/bulk\n    API->>UseCase: GetBulkCampaignStatus(campaignIds)\n    UseCase->>Repo: FindByIds(campaignIds)\n    Repo->>PostgreSQL: SELECT WHERE campaign_id IN (?)\n    PostgreSQL-->>Repo: campaigns list\n    Repo-->>UseCase: []Campaign\n    UseCase-->>API: BulkCampaignStatusResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "bulkCampaignStatus",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "campaign_ids"
+                ],
+                "properties": {
+                  "campaign_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "List of Patricia campaign IDs",
+                    "example": [
+                      "PAT-CMP-001",
+                      "PAT-CMP-002"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCampaignStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/campaigns/v1/replay": {
+      "post": {
+        "tags": [
+          "Campaign"
+        ],
+        "summary": "Replay failed campaign distribution",
+        "description": "Retry distribution of a failed campaign.",
+        "operationId": "replayCampaign",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "campaign_id"
+                ],
+                "properties": {
+                  "campaign_id": {
+                    "type": "string",
+                    "description": "Patricia campaign ID to replay"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Replay accepted for processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/showtimes/v1/categories": {
+      "get": {
+        "tags": [
+          "Showtime"
+        ],
+        "summary": "Get showtime categories",
+        "description": "Retrieve all showtime categories.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as ShowtimeUseCase\n    participant Repo as ShowtimeRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /showtimes/v1/categories\n    API->>UseCase: GetShowtimeCategories()\n    UseCase->>Repo: GetAllCategories()\n    Repo->>PostgreSQL: SELECT all showtime categories\n    PostgreSQL-->>Repo: categories list\n    Repo-->>UseCase: []ShowtimeCategory\n    UseCase-->>API: ShowtimeCategoriesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getShowtimeCategories",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowtimeCategoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/showtimes/v1/categories/{showtime_id}": {
+      "get": {
+        "tags": [
+          "Showtime"
+        ],
+        "summary": "Get showtime category details",
+        "description": "Retrieve details of a specific showtime category.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as ShowtimeUseCase\n    participant Repo as ShowtimeRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /showtimes/v1/categories/{showtime_id}\n    API->>UseCase: GetShowtimeCategoryById(showtimeId)\n    UseCase->>Repo: FindCategoryById(showtimeId)\n    Repo->>PostgreSQL: SELECT WHERE showtime_id = ?\n    PostgreSQL-->>Repo: category or null\n    Repo-->>UseCase: ShowtimeCategory or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: ShowtimeCategoryResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getShowtimeCategoryById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "showtime_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the showtime category",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowtimeCategoryDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/showtimes/v1/schedules": {
+      "get": {
+        "tags": [
+          "Showtime"
+        ],
+        "summary": "Get showtime schedules",
+        "description": "Retrieve all active showtime schedules.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as ShowtimeUseCase\n    participant Repo as ShowtimeRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /showtimes/v1/schedules\n    API->>UseCase: GetShowtimeSchedules()\n    UseCase->>Repo: GetAllSchedules()\n    Repo->>PostgreSQL: SELECT all showtime schedules\n    PostgreSQL-->>Repo: schedules list\n    Repo-->>UseCase: []ShowtimeSchedule\n    UseCase-->>API: ShowtimeSchedulesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getShowtimeSchedules",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowtimeSchedulesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/showtimes/v1/schedules/active": {
+      "get": {
+        "tags": [
+          "Showtime"
+        ],
+        "summary": "Get active showtime schedules",
+        "description": "Retrieve showtime schedules that are currently active based on current time.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as ShowtimeUseCase\n    participant Repo as ShowtimeRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /showtimes/v1/schedules/active\n    API->>UseCase: GetActiveShowtimeSchedules(time)\n    UseCase->>Repo: FindActiveSchedules(time)\n    Repo->>PostgreSQL: SELECT active schedules based on time\n    PostgreSQL-->>Repo: active schedules\n    Repo-->>UseCase: []ShowtimeSchedule\n    UseCase-->>API: ActiveShowtimeSchedulesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getActiveShowtimeSchedules",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowtimeSchedulesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/showtimes/v1/slots": {
+      "get": {
+        "tags": [
+          "Showtime"
+        ],
+        "summary": "Get slot configuration",
+        "description": "Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as ShowtimeUseCase\n    participant Repo as ShowtimeRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /showtimes/v1/slots\n    API->>UseCase: GetShowtimeSlotsConfiguration()\n    UseCase->>Repo: GetSlotConfiguration()\n    Repo->>PostgreSQL: SELECT slot configuration\n    PostgreSQL-->>Repo: slot config list\n    Repo-->>UseCase: []ShowtimeSlot\n    UseCase-->>API: ShowtimeSlotsConfigResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getSlotConfiguration",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotConfigResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/rate-cards/v1": {
+      "get": {
+        "tags": [
+          "Rate Card"
+        ],
+        "summary": "Get all rate cards",
+        "description": "Retrieve all rate cards.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as RateCardUseCase\n    participant Repo as RateCardRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /rate-cards/v1\n    API->>UseCase: GetAllRateCards(activeOnly)\n    UseCase->>Repo: FindAll(activeOnly)\n    Repo->>PostgreSQL: SELECT rate cards\n    PostgreSQL-->>Repo: rate cards list\n    Repo-->>UseCase: []RateCard\n    UseCase-->>API: RateCardsResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getRateCards",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Filter by active status",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateCardListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/rate-cards/v1/{rate_card_id}": {
+      "get": {
+        "tags": [
+          "Rate Card"
+        ],
+        "summary": "Get rate card details",
+        "description": "Retrieve details of a specific rate card.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as RateCardUseCase\n    participant Repo as RateCardRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /rate-cards/v1/{rate_card_id}\n    API->>UseCase: GetRateCardById(rateCardId)\n    UseCase->>Repo: FindById(rateCardId)\n    Repo->>PostgreSQL: SELECT WHERE rate_card_id = ?\n    PostgreSQL-->>Repo: rate card or null\n    Repo-->>UseCase: RateCard or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: RateCardResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getRateCardById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "rate_card_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the rate card",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateCardDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/rate-cards/v1/active": {
+      "get": {
+        "tags": [
+          "Rate Card"
+        ],
+        "summary": "Get active rate cards",
+        "description": "Retrieve all currently active rate cards.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as RateCardUseCase\n    participant Repo as RateCardRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /rate-cards/v1/active\n    API->>UseCase: GetActiveRateCards()\n    UseCase->>Repo: FindActive()\n    Repo->>PostgreSQL: SELECT active rate cards\n    PostgreSQL-->>Repo: active rate cards list\n    Repo-->>UseCase: []RateCard\n    UseCase-->>API: RateCardsResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getActiveRateCards",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateCardListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/rate-cards/v1/validate": {
+      "post": {
+        "tags": [
+          "Rate Card"
+        ],
+        "summary": "Validate rate card",
+        "description": "Validate a rate card for campaign pricing. Patricia provides base_price reference only.\n\n```mermaid\nsequenceDiagram\n    actor Gen21 as Gen21\n    participant API as API Handler\n    participant UseCase as RateCardUseCase\n    participant Repo as RateCardRepository\n    participant PostgreSQL as Database\n    Gen21->>API: POST /rate-cards/v1/validate\n    API->>UseCase: ValidateRateCard(validationData)\n    UseCase->>Repo: FindMatchingRateCard(validationData)\n    Repo->>PostgreSQL: SELECT matching rate card\n    PostgreSQL-->>Repo: matching rate card or null\n    Repo-->>UseCase: RateCard or nil\n    UseCase->>UseCase: Perform validation logic\n    UseCase-->>API: RateCardValidationResponse\n    API-->>Gen21: 200 OK (base_price only, no multiplier)\n```",
+        "operationId": "validateRateCard",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateCardValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateCardValidationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/rate-cards/v1/changes": {
+      "get": {
+        "tags": [
+          "Rate Card"
+        ],
+        "summary": "Get incremental rate card changes",
+        "description": "Retrieve incremental sync of rate card changes since a specific timestamp.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as RateCardUseCase\n    participant Repo as RateCardRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /rate-cards/v1/changes?updated_after=\n    API->>UseCase: GetChangedRateCards(updatedAfter)\n    UseCase->>Repo: FindChanges(updatedAfter)\n    Repo->>PostgreSQL: SELECT changed rate cards\n    PostgreSQL-->>Repo: changed rate cards list\n    Repo-->>UseCase: []RateCardChange\n    UseCase-->>API: RateCardChangesResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getRateCardChanges",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "updated_after",
+            "in": "query",
+            "required": true,
+            "description": "ISO8601 timestamp to get changes after",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-05-12T10:00:00Z"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateCardChangesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/inventories/v1/slots": {
+      "get": {
+        "tags": [
+          "Inventory Slot"
+        ],
+        "summary": "Get inventory slots",
+        "description": "Retrieve all inventory slots.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as InventoryUseCase\n    participant Repo as InventoryRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /inventories/v1/slots\n    API->>UseCase: GetInventorySlots(filters)\n    UseCase->>Repo: FindSlots(filters)\n    Repo->>PostgreSQL: SELECT inventory slots\n    PostgreSQL-->>Repo: slots list\n    Repo-->>UseCase: []InventorySlot\n    UseCase-->>API: InventorySlotsResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getInventorySlots",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "query",
+            "description": "Filter by location ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "showtime_id",
+            "in": "query",
+            "description": "Filter by showtime ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySlotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/inventories/v1/slots/availability": {
+      "get": {
+        "tags": [
+          "Inventory Slot"
+        ],
+        "summary": "Get slot availability",
+        "description": "Retrieve slot availability based on time window.\n\n```mermaid\nsequenceDiagram\n    actor Gen21 as Gen21\n    participant API as API Handler\n    participant UseCase as InventoryUseCase\n    participant Repo as InventoryRepository\n    participant PostgreSQL as Database\n    Gen21->>API: GET /inventories/v1/slots/availability\n    API->>UseCase: GetSlotAvailability(query)\n    UseCase->>Repo: GetAvailabilityStats(query)\n    Repo->>PostgreSQL: SELECT availability stats\n    PostgreSQL-->>Repo: availability stats\n    Repo-->>UseCase: AvailabilityStats (with base_price per showtime)\n    UseCase-->>API: SlotAvailabilityResponse\n    API-->>Gen21: 200 OK\n```",
+        "operationId": "getSlotAvailability",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_ids",
+            "in": "query",
+            "description": "Comma-separated list of location IDs",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "showtime_id",
+            "in": "query",
+            "description": "Filter by showtime ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date for availability check",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date for availability check",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/inventories/v1/slots/check": {
+      "post": {
+        "tags": [
+          "Inventory Slot"
+        ],
+        "summary": "Check slot availability",
+        "description": "Check slot availability before booking. Returns available slots with base_price per showtime.\n\n```mermaid\nsequenceDiagram\n    actor Gen21 as Gen21\n    participant API as API Handler\n    participant UseCase as InventoryUseCase\n    participant Repo as InventoryRepository\n    participant PostgreSQL as Database\n    Gen21->>API: POST /inventories/v1/slots/check\n    API->>UseCase: CheckSlotAvailability(checkData)\n    UseCase->>Repo: FindAvailableSlots(checkData)\n    Repo->>PostgreSQL: SELECT available slots\n    PostgreSQL-->>Repo: available slots\n    UseCase-->>API: SlotCheckResponse (with base_price per showtime)\n    API-->>Gen21: 200 OK\n```",
+        "operationId": "checkSlotAvailability",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckSlotAvailabilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckSlotAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/inventories/v1/slots/{slot_id}": {
+      "get": {
+        "tags": [
+          "Inventory Slot"
+        ],
+        "summary": "Get inventory slot details",
+        "description": "Retrieve details of a specific inventory slot.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as InventoryUseCase\n    participant Repo as InventoryRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /inventories/v1/slots/{slot_id}\n    API->>UseCase: GetSlotById(slotId)\n    UseCase->>Repo: FindById(slotId)\n    Repo->>PostgreSQL: SELECT WHERE slot_id = ?\n    PostgreSQL-->>Repo: slot or null\n    Repo-->>UseCase: InventorySlot or nil\n    UseCase->>UseCase: Check if found\n    UseCase-->>API: InventorySlotResponse or Error\n    API-->>Client: 200 OK or 404 Not Found\n```",
+        "operationId": "getInventorySlotById",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot_id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the inventory slot",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySlotDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/health/v1/integration": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Integration health check",
+        "description": "Check the health status of Patricia integration services.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as HealthUseCase\n    participant Repo as HealthRepository\n    participant DB as Database\n    participant MQTT as MQTTService\n    participant Storage as StorageService\n    Client->>API: GET /health/v1/integration\n    API->>UseCase: GetIntegrationHealth()\n    UseCase->>DB: CheckConnection()\n    DB-->>UseCase: connection status\n    UseCase->>MQTT: CheckConnectivity()\n    MQTT-->>UseCase: mqtt status\n    UseCase->>Storage: CheckAccessibility()\n    Storage-->>UseCase: storage status\n    UseCase-->>API: IntegrationHealthResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getIntegrationHealth",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/health/v1/mqtt": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "MQTT broker health check",
+        "description": "Check MQTT broker connectivity status.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as HealthUseCase\n    participant MQTT as MQTTService\n    Client->>API: GET /health/v1/mqtt\n    API->>UseCase: GetMQTTHealth()\n    UseCase->>MQTT: CheckConnectivity()\n    MQTT-->>UseCase: mqtt status\n    UseCase-->>API: MQTTHealthResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getMqttHealth",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MqttHealthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/health/v1/devices": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Device health summary",
+        "description": "Get summary of device health status.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as HealthUseCase\n    participant Repo as DeviceRepository\n    participant PostgreSQL as Database\n    Client->>API: GET /health/v1/devices\n    API->>UseCase: GetDeviceHealthSummary()\n    UseCase->>Repo: GetHealthStats()\n    Repo->>PostgreSQL: SELECT device health stats\n    PostgreSQL-->>Repo: health stats\n    Repo-->>UseCase: DeviceHealthStats\n    UseCase-->>API: DeviceHealthResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getDeviceHealthSummary",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceHealthSummaryResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/health/v1/storage": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Storage health check",
+        "description": "Check AWS S3 storage accessibility.\n\n```mermaid\nsequenceDiagram\n    actor Client as Client\n    participant API as API Handler\n    participant UseCase as HealthUseCase\n    participant Storage as StorageService\n    Client->>API: GET /health/v1/storage\n    API->>UseCase: GetStorageHealth()\n    UseCase->>Storage: CheckAccessibility()\n    Storage-->>UseCase: storage status\n    UseCase-->>API: StorageHealthResponse\n    API-->>Client: 200 OK\n```",
+        "operationId": "getStorageHealth",
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageHealthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "HmacAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Signature",
+        "description": "HMAC-MD5 signature authentication via KrakenD gateway plugin.\n\n**Signature Scheme:**\n```\nX-Signature = hex(HMAC-MD5(apiKey + secretKey + timestamp))\n```\n\n**Required Headers (POST/PUT/DELETE):**\n- `ChannelId`: Integration channel identifier (e.g., G21)\n- `Api_key`: Public API key\n- `X-Timestamp`: Unix epoch timestamp in seconds\n- `X-Signature`: Hex-encoded HMAC-MD5 signature\n\n**Required Query Parameters (GET):**\n- `channel_id`: Integration channel identifier\n- `api_key`: Public API key\n- `x_timestamp`: Unix epoch timestamp in seconds\n- `x_signature`: Hex-encoded HMAC-MD5 signature\n\n**Clock Skew:** 300 seconds (5 minutes)\n\n**Example (POST):**\n```bash\nTIMESTAMP=$(date +%s)\nAPI_KEY=\"xxxx\"\nSECRET_KEY=\"secret-key-1\"\nSIGNATURE=$(echo -n \"${API_KEY}${SECRET_KEY}${TIMESTAMP}\" | openssl dgst -md5 -hmac \"${SECRET_KEY}\" -hex | awk '{print $NF}')\n\ncurl -X POST https://api.patricia.io/campaigns/v1/commercial \\\n  -H \"ChannelId: G21\" \\\n  -H \"Api_key: ${API_KEY}\" \\\n  -H \"X-Timestamp: ${TIMESTAMP}\" \\\n  -H \"X-Signature: ${SIGNATURE}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"external_campaign_id\":\"GEN21-CMP-001\",...}'\n```\n\n**Example (GET):**\n```bash\ncurl \"https://api.patricia.io/master/v1/locations/hierarchy?channel_id=G21&api_key=${API_KEY}&x_timestamp=${TIMESTAMP}&x_signature=${SIGNATURE}\"\n```\n"
+      }
+    },
+    "schemas": {
+      "GatewayErrorResponse": {
+        "description": "Error response from KrakenD gateway (HMAC authentication layer)",
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Gateway error message"
+          }
+        },
+        "example": {
+          "error": "invalid signature"
+        }
+      },
+      "ServiceErrorResponse": {
+        "description": "Error response from Patricia service (business logic layer)",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Service-specific error code"
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable error description"
+              }
+            }
+          }
+        },
+        "example": {
+          "status": {
+            "code": "MST40101",
+            "message": "Unauthorized"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "description": "Generic error response (deprecated, use GatewayErrorResponse or ServiceErrorResponse)",
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "example": {
+          "error": "invalid signature"
+        }
+      },
+      "Location": {
+        "type": "object",
+        "properties": {
+          "location_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the location",
+            "example": "CITY-001"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the location",
+            "example": "Bandung"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PROVINCE",
+              "CITY"
+            ],
+            "description": "Type of location"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone identifier",
+            "example": "Asia/Jakarta"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent location ID (for hierarchical relationships)"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "description": "Child locations (for hierarchy)"
+          }
+        }
+      },
+      "LocationHierarchyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "MST20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Location hierarchy successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            }
+          }
+        }
+      },
+      "LocationListResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "MST20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Locations successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "LocationDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "MST20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Location details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "$ref": "#/components/schemas/Location"
+          }
+        }
+      },
+      "LocationChangesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "MST20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Location changes successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "location_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "change_type": {
+                  "type": "string",
+                  "enum": [
+                    "CREATED",
+                    "UPDATED",
+                    "DELETED"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "data": {
+                  "$ref": "#/components/schemas/Location"
+                }
+              }
+            }
+          }
+        }
+      },
+      "LocationValidationRequest": {
+        "type": "object",
+        "required": [
+          "location_ids"
+        ],
+        "properties": {
+          "location_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of location IDs to validate"
+          }
+        }
+      },
+      "LocationValidationResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "MST20004"
+              },
+              "message": {
+                "type": "string",
+                "example": "Location validation completed"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "valid_locations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "invalid_locations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "OrganizationSyncRequest": {
+        "type": "object",
+        "required": [
+          "organization_id",
+          "organization_name"
+        ],
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the organization",
+            "example": "ORG-001"
+          },
+          "organization_name": {
+            "type": "string",
+            "description": "Legal name of the organization",
+            "example": "ABC Corp"
+          },
+          "brand_name": {
+            "type": "string",
+            "description": "Brand/trading name",
+            "example": "ABC"
+          },
+          "industry_id": {
+            "type": "string",
+            "description": "Product industry classification ID"
+          }
+        }
+      },
+      "OrganizationSyncResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "ORG20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Organization synced successfully"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "external_client_id": {
+                "type": "string",
+                "description": "Client ID assigned by consumer system",
+                "example": "GEN21-CLI-001"
+              }
+            }
+          }
+        }
+      },
+      "OrganizationDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "ORG20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Organization details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "organization_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "organization_name": {
+                "type": "string"
+              },
+              "brand_name": {
+                "type": "string"
+              },
+              "industry_id": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "ProductIndustryResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "ORG20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Product industry data successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "industry_id": {
+                  "type": "string"
+                },
+                "industry_name": {
+                  "type": "string"
+                },
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "category_id": {
+                        "type": "string"
+                      },
+                      "category_name": {
+                        "type": "string"
+                      },
+                      "sub_categories": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "sub_category_id": {
+                              "type": "string"
+                            },
+                            "sub_category_name": {
+                              "type": "string"
+                            },
+                            "products": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "product_id": {
+                                    "type": "string"
+                                  },
+                                  "product_name": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "DeviceCapabilities": {
+        "type": "object",
+        "properties": {
+          "max_resolution": {
+            "type": "string",
+            "description": "Maximum display resolution",
+            "example": "1920x1080"
+          },
+          "video_codec": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Supported video codecs",
+            "example": [
+              "H264"
+            ]
+          },
+          "storage_mb": {
+            "type": "integer",
+            "description": "Available storage in megabytes",
+            "example": 16000
+          },
+          "audio_supported": {
+            "type": "boolean",
+            "description": "Whether device supports audio"
+          },
+          "interactive_supported": {
+            "type": "boolean",
+            "description": "Whether device supports interactive content"
+          }
+        }
+      },
+      "DeviceSyncRequest": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_label",
+          "organization_id",
+          "location_id"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "description": "Unique device identifier",
+            "example": "DEV-001"
+          },
+          "device_label": {
+            "type": "string",
+            "description": "Human-readable device label",
+            "example": "Lobby TV"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning organization ID",
+            "example": "ORG-001"
+          },
+          "location_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Location ID where device is installed",
+            "example": "CITY-001"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "GPS latitude",
+            "example": -6.123
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "GPS longitude",
+            "example": 106.123
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/DeviceCapabilities"
+          }
+        }
+      },
+      "DeviceSyncResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "DEV20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device synced successfully"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "inventory_status": {
+                "type": "string",
+                "enum": [
+                  "ACTIVE",
+                  "PENDING",
+                  "INACTIVE"
+                ],
+                "example": "ACTIVE"
+              }
+            }
+          }
+        }
+      },
+      "DeviceAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "DEV20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device availability successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "available_devices": {
+                "type": "integer"
+              },
+              "total_devices": {
+                "type": "integer"
+              },
+              "unavailable_devices": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "DeviceHealthCheckRequest": {
+        "type": "object",
+        "properties": {
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of device IDs to check"
+          }
+        }
+      },
+      "DeviceHealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "DEV20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device health check completed"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ONLINE",
+                    "OFFLINE"
+                  ]
+                },
+                "last_seen": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DeviceCapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "DEV20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device capabilities successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "capability_id": {
+                  "type": "string"
+                },
+                "capability_name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DeviceDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "DEV20004"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "device_id": {
+                "type": "string"
+              },
+              "device_label": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "location_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACTIVE",
+                  "INACTIVE"
+                ]
+              },
+              "capabilities": {
+                "$ref": "#/components/schemas/DeviceCapabilities"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "CampaignSchedule": {
+        "type": "object",
+        "required": [
+          "start_at",
+          "end_at"
+        ],
+        "properties": {
+          "start_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Campaign start time (ISO8601 UTC)",
+            "example": "2026-05-12T00:00:00Z"
+          },
+          "end_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Campaign end time (ISO8601 UTC)",
+            "example": "2026-05-20T00:00:00Z"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone for scheduling",
+            "example": "Asia/Jakarta"
+          }
+        }
+      },
+      "CampaignTarget": {
+        "type": "object",
+        "properties": {
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Specific device IDs to target (optional if location_ids provided)"
+          },
+          "location_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Location IDs to target (optional if device_ids provided)",
+            "example": [
+              "CITY-001"
+            ]
+          }
+        }
+      },
+      "CampaignMedia": {
+        "type": "object",
+        "required": [
+          "media_id",
+          "media_type",
+          "download_url",
+          "sha256"
+        ],
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "description": "Unique media identifier",
+            "example": "MEDIA-001"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "VIDEO",
+              "IMAGE"
+            ],
+            "description": "Type of media content"
+          },
+          "download_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to download the media asset",
+            "example": "https://s3.amazonaws.com/bucket/media.mp4"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 hash of the media file for integrity verification",
+            "example": "xxxxx"
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "description": "Duration of the media in seconds",
+            "example": 30
+          },
+          "filesize_bytes": {
+            "type": "integer",
+            "description": "File size in bytes",
+            "example": 10485760
+          }
+        }
+      },
+      "CreateCampaignRequest": {
+        "type": "object",
+        "required": [
+          "external_campaign_id",
+          "campaign_name",
+          "organization_id",
+          "schedule",
+          "targets",
+          "media"
+        ],
+        "properties": {
+          "external_campaign_id": {
+            "type": "string",
+            "description": "Campaign ID from the external system",
+            "example": "GEN21-CMP-001"
+          },
+          "campaign_name": {
+            "type": "string",
+            "description": "Human-readable campaign name",
+            "example": "Promo Ramadhan"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning organization ID",
+            "example": "ORG-001"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Campaign priority (1 = highest)",
+            "example": 1
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/CampaignSchedule"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/CampaignTarget"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CampaignMedia"
+            },
+            "minItems": 1
+          },
+          "timeshow_percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percentage of timeshow allocation",
+            "example": 80
+          }
+        }
+      },
+      "CreateCampaignResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "CMP20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Campaign created successfully"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "campaign_id": {
+                "type": "string",
+                "description": "Patricia-assigned campaign ID",
+                "example": "PAT-CMP-001"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACCEPTED",
+                  "PROCESSING",
+                  "DISTRIBUTED",
+                  "DOWNLOADED",
+                  "ACTIVE",
+                  "COMPLETED",
+                  "FAILED",
+                  "CANCELLED"
+                ],
+                "example": "ACCEPTED"
+              },
+              "accepted_at": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-05-12T10:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "UpdateCampaignRequest": {
+        "type": "object",
+        "properties": {
+          "campaign_name": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/CampaignSchedule"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/CampaignTarget"
+          },
+          "timeshow_percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "UpdateCampaignResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "CMP20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Campaign updated successfully"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "campaign_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "CancelCampaignResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "CMP20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Campaign cancelled successfully"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "campaign_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "example": "CANCELLED"
+              },
+              "cancelled_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "CampaignStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "CMP20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Campaign status successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "campaign_id": {
+                "type": "string"
+              },
+              "external_campaign_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACCEPTED",
+                  "PROCESSING",
+                  "DISTRIBUTED",
+                  "DOWNLOADED",
+                  "ACTIVE",
+                  "COMPLETED",
+                  "FAILED",
+                  "CANCELLED"
+                ]
+              },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "distributed_devices": {
+                    "type": "integer"
+                  },
+                  "total_devices": {
+                    "type": "integer"
+                  },
+                  "completion_percentage": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "timestamps": {
+                "type": "object",
+                "properties": {
+                  "accepted_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "processing_started_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "distributed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "BulkCampaignStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "CMP20004"
+              },
+              "message": {
+                "type": "string",
+                "example": "Bulk campaign status retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "campaign_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ShowtimeCategory": {
+        "type": "object",
+        "properties": {
+          "showtime_id": {
+            "type": "string",
+            "example": "SHOW-001"
+          },
+          "showtime_code": {
+            "type": "string",
+            "example": "PRIME_TIME"
+          },
+          "showtime_name": {
+            "type": "string",
+            "example": "Prime Time"
+          },
+          "description": {
+            "type": "string",
+            "example": "Jam tayang premium"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Priority level (1 = highest)",
+            "example": 1
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "ShowtimeCategoriesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "SHW20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Showtime categories successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowtimeCategory"
+            }
+          }
+        }
+      },
+      "ShowtimeCategoryDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "SHW20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Showtime category details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "$ref": "#/components/schemas/ShowtimeCategory"
+          }
+        }
+      },
+      "ShowtimeSchedule": {
+        "type": "object",
+        "properties": {
+          "schedule_id": {
+            "type": "string",
+            "example": "SCH-001"
+          },
+          "showtime_id": {
+            "type": "string",
+            "example": "SHOW-001"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "MONDAY",
+                "TUESDAY",
+                "WEDNESDAY",
+                "THURSDAY",
+                "FRIDAY",
+                "SATURDAY",
+                "SUNDAY"
+              ]
+            },
+            "example": [
+              "MONDAY",
+              "TUESDAY",
+              "WEDNESDAY"
+            ]
+          },
+          "start_time": {
+            "type": "string",
+            "description": "Schedule start time (HH:mm:ss)",
+            "example": "18:00:00"
+          },
+          "end_time": {
+            "type": "string",
+            "description": "Schedule end time (HH:mm:ss)",
+            "example": "22:00:00"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Asia/Jakarta"
+          },
+          "slot_duration_seconds": {
+            "type": "integer",
+            "description": "Duration of each slot in seconds",
+            "example": 30
+          }
+        }
+      },
+      "ShowtimeSchedulesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "SHW20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Showtime schedules successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowtimeSchedule"
+            }
+          }
+        }
+      },
+      "SlotConfigResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "SHW20004"
+              },
+              "message": {
+                "type": "string",
+                "example": "Showtime slot configuration successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slot_id": {
+                  "type": "string"
+                },
+                "showtime_id": {
+                  "type": "string"
+                },
+                "duration_seconds": {
+                  "type": "integer",
+                  "description": "Standard slot duration (per STO agreement: 30 seconds)",
+                  "example": 30
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RateCard": {
+        "type": "object",
+        "properties": {
+          "rate_card_id": {
+            "type": "string",
+            "example": "RATE-001"
+          },
+          "showtime_id": {
+            "type": "string",
+            "example": "SHOW-001"
+          },
+          "showtime_code": {
+            "type": "string",
+            "example": "PRIME_TIME"
+          },
+          "slot_duration_seconds": {
+            "type": "integer",
+            "example": 30
+          },
+          "currency": {
+            "type": "string",
+            "example": "IDR"
+          },
+          "base_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Base price per slot (Patricia provides reference only)",
+            "example": 150000
+          },
+          "effective_start_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-05-01"
+          },
+          "effective_end_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-12-31"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "RateCardListResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "RTC20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Rate cards successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateCard"
+            }
+          }
+        }
+      },
+      "RateCardDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "RTC20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Rate card details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "$ref": "#/components/schemas/RateCard"
+          }
+        }
+      },
+      "RateCardValidationRequest": {
+        "type": "object",
+        "required": [
+          "showtime_id",
+          "campaign_duration_days"
+        ],
+        "properties": {
+          "showtime_id": {
+            "type": "string",
+            "example": "SHOW-001"
+          },
+          "campaign_duration_days": {
+            "type": "integer",
+            "example": 7
+          },
+          "slot_duration_seconds": {
+            "type": "integer",
+            "example": 30
+          }
+        }
+      },
+      "RateCardValidationResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "RTC20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Rate card validation successful"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean",
+                "description": "Whether a matching rate card exists"
+              },
+              "matched_rate_card": {
+                "type": "object",
+                "properties": {
+                  "rate_card_id": {
+                    "type": "string"
+                  },
+                  "base_price": {
+                    "type": "number",
+                    "format": "double"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RateCardChangesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "RTC20004"
+              },
+              "message": {
+                "type": "string",
+                "example": "Rate card changes successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rate_card_id": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "CREATE",
+                    "UPDATE",
+                    "DELETE"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "InventorySlot": {
+        "type": "object",
+        "properties": {
+          "slot_id": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "showtime_id": {
+            "type": "string"
+          },
+          "showtime_code": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "start_time": {
+            "type": "string"
+          },
+          "end_time": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "slot_duration_seconds": {
+            "type": "integer",
+            "example": 30
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reserved": {
+            "type": "boolean"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "base_price": {
+                "type": "number",
+                "format": "double"
+              },
+              "currency": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "InventorySlotsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INV20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Inventory slots successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InventorySlot"
+            }
+          }
+        }
+      },
+      "SlotAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INV20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "Slot availability successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "available_slots": {
+                    "type": "integer",
+                    "example": 80
+                  },
+                  "reserved_slots": {
+                    "type": "integer",
+                    "example": 20
+                  },
+                  "total_slots": {
+                    "type": "integer",
+                    "example": 120
+                  }
+                }
+              },
+              "by_location": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "available_slots": {
+                      "type": "integer"
+                    },
+                    "reserved_slots": {
+                      "type": "integer"
+                    },
+                    "total_slots": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "by_showtime": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "showtime_id": {
+                      "type": "string"
+                    },
+                    "showtime_code": {
+                      "type": "string"
+                    },
+                    "available_slots": {
+                      "type": "integer"
+                    },
+                    "reserved_slots": {
+                      "type": "integer"
+                    },
+                    "total_slots": {
+                      "type": "integer"
+                    },
+                    "pricing": {
+                      "type": "object",
+                      "properties": {
+                        "base_price": {
+                          "type": "number",
+                          "format": "double"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "CheckSlotAvailabilityRequest": {
+        "type": "object",
+        "required": [
+          "location_ids",
+          "showtime_id",
+          "start_date",
+          "end_date"
+        ],
+        "properties": {
+          "location_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "CITY-001"
+            ]
+          },
+          "showtime_id": {
+            "type": "string",
+            "example": "SHOW-001"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-05-12"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-05-20"
+          }
+        }
+      },
+      "CheckSlotAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INV20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Slot availability check completed"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "available_slots": {
+                "type": "integer",
+                "description": "Number of available slots",
+                "example": 80
+              },
+              "reserved_slots": {
+                "type": "integer",
+                "description": "Number of reserved slots",
+                "example": 20
+              },
+              "total_slots": {
+                "type": "integer",
+                "description": "Total number of slots",
+                "example": 120
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "available_slots": {
+                      "type": "integer"
+                    },
+                    "reserved_slots": {
+                      "type": "integer"
+                    },
+                    "total_slots": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "by_showtime": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "showtime_id": {
+                      "type": "string"
+                    },
+                    "showtime_code": {
+                      "type": "string"
+                    },
+                    "available_slots": {
+                      "type": "integer"
+                    },
+                    "reserved_slots": {
+                      "type": "integer"
+                    },
+                    "total_slots": {
+                      "type": "integer"
+                    },
+                    "pricing": {
+                      "type": "object",
+                      "properties": {
+                        "base_price": {
+                          "type": "number",
+                          "format": "double"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "InventorySlotDetailResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INV20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Inventory slot details successfully retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "slot_id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "showtime_id": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "start_time": {
+                "type": "string"
+              },
+              "end_time": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "slot_duration_seconds": {
+                "type": "integer",
+                "example": 30
+              },
+              "available": {
+                "type": "boolean"
+              },
+              "reserved": {
+                "type": "boolean"
+              },
+              "reservation_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "HLT20000"
+              },
+              "message": {
+                "type": "string",
+                "example": "Integration health status retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "HEALTHY",
+                  "DEGRADED",
+                  "UNHEALTHY"
+                ],
+                "example": "HEALTHY"
+              },
+              "components": {
+                "type": "object",
+                "properties": {
+                  "database": {
+                    "type": "string",
+                    "enum": [
+                      "CONNECTED",
+                      "DISCONNECTED"
+                    ]
+                  },
+                  "mqtt_broker": {
+                    "type": "string",
+                    "enum": [
+                      "CONNECTED",
+                      "DISCONNECTED"
+                    ]
+                  },
+                  "storage": {
+                    "type": "string",
+                    "enum": [
+                      "ACCESSIBLE",
+                      "INACCESSIBLE"
+                    ]
+                  },
+                  "api_gateway": {
+                    "type": "string",
+                    "enum": [
+                      "OPERATIONAL",
+                      "DEGRADED"
+                    ]
+                  }
+                }
+              },
+              "last_checked": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "uptime_percentage": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        }
+      },
+      "MqttHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "HLT20001"
+              },
+              "message": {
+                "type": "string",
+                "example": "MQTT broker status retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "CONNECTED",
+                  "DISCONNECTED"
+                ]
+              },
+              "broker_url": {
+                "type": "string"
+              },
+              "connection_count": {
+                "type": "integer"
+              },
+              "last_connected": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "DeviceHealthSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "HLT20002"
+              },
+              "message": {
+                "type": "string",
+                "example": "Device health summary retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "total_devices": {
+                    "type": "integer"
+                  },
+                  "online_devices": {
+                    "type": "integer"
+                  },
+                  "offline_devices": {
+                    "type": "integer"
+                  },
+                  "healthy_devices": {
+                    "type": "integer"
+                  },
+                  "unhealthy_devices": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "by_location": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "online": {
+                      "type": "integer"
+                    },
+                    "offline": {
+                      "type": "integer"
+                    },
+                    "healthy": {
+                      "type": "integer"
+                    },
+                    "unhealthy": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "StorageHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "HLT20003"
+              },
+              "message": {
+                "type": "string",
+                "example": "Storage accessibility status retrieved"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACCESSIBLE",
+                  "INACCESSIBLE"
+                ]
+              },
+              "storage_provider": {
+                "type": "string",
+                "example": "AWS S3"
+              },
+              "region": {
+                "type": "string",
+                "example": "ap-southeast-1"
+              },
+              "last_access": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "response_time_ms": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request payload. Can originate from:\n- **KrakenD Gateway**: Missing HMAC auth params\n- **Service**: Invalid JSON body or missing required fields\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ServiceErrorResponse"
+                }
+              ]
+            },
+            "examples": {
+              "gateway": {
+                "summary": "KrakenD Gateway Error",
+                "value": {
+                  "error": "missing channel_id"
+                }
+              },
+              "service": {
+                "summary": "Service Error",
+                "value": {
+                  "status": {
+                    "code": "MST40002",
+                    "message": "Invalid request payload"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Authentication failed. Can originate from:\n- **KrakenD Gateway**: Invalid HMAC signature, expired timestamp, or unknown credentials\n- **Service**: Invalid or expired session (if applicable)\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ServiceErrorResponse"
+                }
+              ]
+            },
+            "examples": {
+              "gatewayInvalidCredentials": {
+                "summary": "KrakenD - Invalid Credentials",
+                "value": {
+                  "error": "invalid credentials"
+                }
+              },
+              "gatewayRequestExpired": {
+                "summary": "KrakenD - Request Expired",
+                "value": {
+                  "error": "request expired"
+                }
+              },
+              "gatewayInvalidSignature": {
+                "summary": "KrakenD - Invalid Signature",
+                "value": {
+                  "error": "invalid signature"
+                }
+              },
+              "service": {
+                "summary": "Service Error",
+                "value": {
+                  "status": {
+                    "code": "MST40101",
+                    "message": "Unauthorized"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Endpoint not authorized. Originates from KrakenD Gateway when the channel's `allowed_endpoints` does not include the requested path.\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GatewayErrorResponse"
+            },
+            "example": {
+              "error": "endpoint not authorized"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found. Originates from the Patricia service.\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ServiceErrorResponse"
+            },
+            "examples": {
+              "locationNotFound": {
+                "summary": "Location Not Found",
+                "value": {
+                  "status": {
+                    "code": "MST40401",
+                    "message": "Location not found"
+                  }
+                }
+              },
+              "organizationNotFound": {
+                "summary": "Organization Not Found",
+                "value": {
+                  "status": {
+                    "code": "ORG40401",
+                    "message": "Organization not found"
+                  }
+                }
+              },
+              "deviceNotFound": {
+                "summary": "Device Not Found",
+                "value": {
+                  "status": {
+                    "code": "DEV40401",
+                    "message": "Device not found"
+                  }
+                }
+              },
+              "campaignNotFound": {
+                "summary": "Campaign Not Found",
+                "value": {
+                  "status": {
+                    "code": "CMP40402",
+                    "message": "Campaign not found"
+                  }
+                }
+              },
+              "showtimeNotFound": {
+                "summary": "Showtime Not Found",
+                "value": {
+                  "status": {
+                    "code": "SHW40401",
+                    "message": "Showtime category not found"
+                  }
+                }
+              },
+              "rateCardNotFound": {
+                "summary": "Rate Card Not Found",
+                "value": {
+                  "status": {
+                    "code": "RTC40401",
+                    "message": "Rate card not found"
+                  }
+                }
+              },
+              "slotNotFound": {
+                "summary": "Inventory Slot Not Found",
+                "value": {
+                  "status": {
+                    "code": "INV40401",
+                    "message": "Inventory slot not found"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Duplicate conflict. Originates from the Patricia service.\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ServiceErrorResponse"
+            },
+            "examples": {
+              "duplicateOrganization": {
+                "summary": "Duplicate Organization",
+                "value": {
+                  "status": {
+                    "code": "ORG40901",
+                    "message": "Duplicate organization"
+                  }
+                }
+              },
+              "duplicateDevice": {
+                "summary": "Duplicate Device",
+                "value": {
+                  "status": {
+                    "code": "DEV40901",
+                    "message": "Duplicate device"
+                  }
+                }
+              },
+              "duplicateCampaign": {
+                "summary": "Duplicate Campaign",
+                "value": {
+                  "status": {
+                    "code": "CMP40901",
+                    "message": "Duplicate campaign"
+                  }
+                }
+              },
+              "campaignAlreadyCompleted": {
+                "summary": "Campaign Already Completed or Cancelled",
+                "value": {
+                  "status": {
+                    "code": "CMP40902",
+                    "message": "Campaign already completed or cancelled"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Business validation failed. Originates from the Patricia service.\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ServiceErrorResponse"
+            },
+            "examples": {
+              "masterData": {
+                "summary": "Master Data Validation Failed",
+                "value": {
+                  "status": {
+                    "code": "MST42201",
+                    "message": "Validation failed"
+                  }
+                }
+              },
+              "campaign": {
+                "summary": "Campaign Validation Failed",
+                "value": {
+                  "status": {
+                    "code": "CMP42201",
+                    "message": "Business validation failed"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error. Can originate from:\n- **KrakenD Gateway**: Upstream service unreachable\n- **Service**: Database failure, internal processing error\n",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ServiceErrorResponse"
+                }
+              ]
+            },
+            "examples": {
+              "service": {
+                "summary": "Service Error",
+                "value": {
+                  "status": {
+                    "code": "MST50001",
+                    "message": "Database query failed"
+                  }
+                }
+              },
+              "mqttUnreachable": {
+                "summary": "MQTT Broker Unreachable",
+                "value": {
+                  "status": {
+                    "code": "HLT50002",
+                    "message": "MQTT broker unreachable"
+                  }
+                }
+              },
+              "storageInaccessible": {
+                "summary": "Storage Inaccessible",
+                "value": {
+                  "status": {
+                    "code": "HLT50003",
+                    "message": "Storage inaccessible"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
     mermaid.initialize({
       startOnLoad: false,
       theme: 'default',
       securityLevel: 'loose',
       sequence: {
-        diagramMarginX: 50,
-        diagramMarginY: 10,
-        actorMargin: 50,
-        width: 150,
-        height: 65,
-        boxMargin: 10,
-        boxTextMargin: 5,
-        noteMargin: 10,
-        messageMargin: 35,
-        mirrorActors: true,
-        bottomMarginAdj: 1,
-        useMaxWidth: true,
+        diagramMarginX: 50, diagramMarginY: 10, actorMargin: 50,
+        width: 150, height: 65, boxMargin: 10, boxTextMargin: 5,
+        noteMargin: 10, messageMargin: 35, mirrorActors: true,
+        bottomMarginAdj: 1, useMaxWidth: true,
       }
     });
 
-    function renderMermaidDiagrams() {
+    async function renderMermaidDiagrams() {
       const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
       if (codeBlocks.length === 0) return;
-
       const promises = Array.from(codeBlocks).map(async (block, index) => {
         const id = 'mermaid-' + index;
         block.id = id;
@@ -61,7 +4245,6 @@ python3 -m http.server 8080</pre>
         const container = document.createElement('div');
         container.className = 'mermaid';
         block.parentNode.replaceWith(container);
-
         try {
           const { svg } = await mermaid.render(id, graphDefinition);
           container.innerHTML = svg;
@@ -69,30 +4252,19 @@ python3 -m http.server 8080</pre>
           container.innerHTML = '<pre>' + graphDefinition + '</pre>';
         }
       });
-
       return Promise.all(promises);
     }
 
     window.onload = function() {
-      const isFileProtocol = window.location.protocol === 'file:';
-      if (isFileProtocol) {
-        document.getElementById('cors-warning').style.display = 'block';
-      }
-
       const ui = SwaggerUIBundle({
-        url: isFileProtocol ? '' : './patricia-api.yaml',
+        spec: spec,
         dom_id: '#swagger-ui',
         deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        plugins: [
-          SwaggerUIBundle.plugins.DownloadUrl
-        ],
-        layout: "StandaloneLayout",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+        layout: 'StandaloneLayout',
         validatorUrl: null,
-        docExpansion: "list",
+        docExpansion: 'list',
         defaultModelsExpandDepth: 3,
         defaultModelExpandDepth: 3,
         displayRequestDuration: true,
@@ -100,28 +4272,13 @@ python3 -m http.server 8080</pre>
         showExtensions: true,
         showCommonExtensions: true,
         tryItOutEnabled: false,
-        supportedSubmitMethods: ["get", "post", "put", "delete", "patch"],
+        supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
         persistAuthorization: true,
-        onComplete: async function() {
-          if (isFileProtocol) {
-            document.getElementById('swagger-ui').innerHTML = '';
-            return;
-          }
-          await renderMermaidDiagrams();
-        },
-        onFailure: function(data) {
-          if (isFileProtocol) {
-            document.getElementById('swagger-ui').innerHTML = '';
-          }
-        }
+        onComplete: async function() { await renderMermaidDiagrams(); }
       });
 
       window.ui = ui;
-
-      // Re-render Mermaid diagrams when user expands/collapses endpoints
-      const observer = new MutationObserver(() => {
-        renderMermaidDiagrams();
-      });
+      const observer = new MutationObserver(() => { renderMermaidDiagrams(); });
       observer.observe(document.getElementById('swagger-ui'), { childList: true, subtree: true });
     };
   </script>
