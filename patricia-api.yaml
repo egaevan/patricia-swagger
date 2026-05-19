@@ -816,7 +816,7 @@ paths:
       tags:
         - Showtime
       summary: Get slot configuration
-      description: Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.
+      description: 'Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.'
       operationId: getSlotConfiguration
       security:
         - ApiKeyAuth: []
@@ -2007,11 +2007,11 @@ components:
           properties:
             slot_duration_seconds:
               type: integer
-              description: Standard slot duration (per STO agreement: 30 seconds)
+              description: 'Standard slot duration (per STO agreement: 30 seconds)'
               example: 30
             slots_per_organization:
               type: integer
-              description: Total slots per organization (per STO agreement: 120)
+              description: 'Total slots per organization (per STO agreement: 120)'
               example: 120
 
     # Rate Card Schemas
