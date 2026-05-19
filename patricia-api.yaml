@@ -53,22 +53,6 @@ info:
     ### Timestamp Format
     Unix epoch timestamp in seconds (e.g., `1716307200`). Clock skew tolerance: 300 seconds (5 minutes).
 
-    ### Credential File Format
-    Credentials are stored in a local JSON file managed by the KrakenD gateway:
-    ```json
-    [
-      {
-        "channel_id": "G21",
-        "api_key": "xxxx",
-        "secret_key": "secret-key-1",
-        "allowed_endpoints": [
-          "/patricia/v1/organization",
-          "/patricia/v1/user"
-        ]
-      }
-    ]
-    ```
-
     ### Error Responses
 
     | Scenario | HTTP Status | Response Body |
@@ -102,9 +86,9 @@ info:
     name: Proprietary
 
 servers:
-  - url: https://api.patricia.io
+  - url: https://api.patricia.co.id
     description: Production
-  - url: https://staging-api.patricia.io
+  - url: https://api.patricia.kubesnp.salt.id
     description: Staging
 
 tags:
