@@ -2214,7 +2214,7 @@ components:
                 type: string
               duration_seconds:
                 type: integer
-                description: Standard slot duration (per STO agreement: 30 seconds)
+                description: "Standard slot duration (per STO agreement: 30 seconds)"
                 example: 30
               description:
                 type: string
