@@ -3,7 +3,7 @@ info:
   title: Patricia API
   description: |
     Patricia Digital Out-of-Home (DOOH) Commercial Inventory Platform API.
-    
+
     Patricia serves as the operational/device platform and source of truth for:
     - Location master data
     - Device inventory and capabilities
@@ -12,24 +12,77 @@ info:
     - Rate card references
     - Slot inventory management
     - Health monitoring
-    
+
     ## Authentication
-    All API requests require HMAC-SHA256 request signing with the following headers:
-    - `X-API-Key`: Public API key identifying the caller
-    - `X-Channel-ID`: Integration channel identifier
-    - `X-Timestamp`: Request timestamp in ISO 8601 format (UTC)
-    - `X-Signature`: HMAC-SHA256 signature (Base64 encoded)
-    - `X-Nonce`: Unique request identifier (UUID v4) to prevent replay attacks
-    
-    ## Request Signing
+
+    All API requests require HMAC-MD5 signature validation via KrakenD gateway plugin.
+
+    ### Signature Scheme
     ```
-    stringToSign = HTTP_METHOD + "\n" + REQUEST_PATH + "\n" + TIMESTAMP + "\n" + REQUEST_BODY
-    signature = Base64Encode(HMAC-SHA256(stringToSign, secretKey))
+    X-Signature = hex(HMAC-MD5(apiKey + secretKey + timestamp))
     ```
-    
+
+    ### Request Format
+
+    #### GET Requests (query parameters)
+    ```
+    GET /patricia/v1/endpoint?channel_id=G21&api_key=xxxx&x_timestamp=1716307200&x_signature=<hex-hmac>
+    ```
+
+    #### POST/PUT/DELETE Requests (headers)
+    ```
+    POST /patricia/v1/endpoint
+    Headers:
+      ChannelId: G21
+      Api_key: xxxx
+      X-Timestamp: 1716307200
+      X-Signature: <hex-hmac>
+      Content-Type: application/json
+      Accept: application/json
+    ```
+
+    ### Header/Query Parameter Names
+
+    | Purpose | Header | Query Param |
+    |---------|--------|-------------|
+    | Channel ID | `ChannelId` | `channel_id` |
+    | API Key | `Api_key` | `api_key` |
+    | Timestamp | `X-Timestamp` | `x_timestamp` |
+    | Signature | `X-Signature` | `x_signature` |
+
+    ### Timestamp Format
+    Unix epoch timestamp in seconds (e.g., `1716307200`). Clock skew tolerance: 300 seconds (5 minutes).
+
+    ### Credential File Format
+    Credentials are stored in a local JSON file managed by the KrakenD gateway:
+    ```json
+    [
+      {
+        "channel_id": "G21",
+        "api_key": "xxxx",
+        "secret_key": "secret-key-1",
+        "allowed_endpoints": [
+          "/patricia/v1/organization",
+          "/patricia/v1/user"
+        ]
+      }
+    ]
+    ```
+
+    ### Error Responses
+
+    | Scenario | HTTP Status | Response Body |
+    |----------|-------------|---------------|
+    | Missing required params | 400 | `{"error": "missing channel_id"}` |
+    | Credential not found | 401 | `{"error": "invalid credentials"}` |
+    | Timestamp expired | 401 | `{"error": "request expired"}` |
+    | Signature mismatch | 401 | `{"error": "invalid signature"}` |
+    | Endpoint not authorized | 403 | `{"error": "endpoint not authorized"}` |
+
     ## Timestamp Standard
-    All timestamps use ISO8601 UTC format: `2026-05-12T10:00:00Z`
-    
+    All business timestamps use ISO8601 UTC format: `2026-05-12T10:00:00Z`
+    Authentication timestamps use Unix epoch: `1716307200`
+
     ## HTTP Status Convention
     | Status | Meaning |
     |--------|---------|
@@ -37,6 +90,7 @@ info:
     | 202 | Accepted async processing |
     | 400 | Invalid payload |
     | 401 | Unauthorized |
+    | 403 | Forbidden |
     | 404 | Resource not found |
     | 409 | Duplicate conflict |
     | 422 | Business validation failed |
@@ -80,18 +134,18 @@ paths:
       description: Retrieve the complete location hierarchy from Province to City level.
       operationId: getLocationHierarchy
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationHierarchyResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/LocationHierarchyResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /master/v1/locations:
     get:
@@ -101,7 +155,7 @@ paths:
       description: Retrieve a flat list of all locations.
       operationId: getLocations
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: type
           in: query
@@ -125,16 +179,16 @@ paths:
             default: 50
             maximum: 100
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/LocationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /master/v1/locations/{location_id}:
     get:
@@ -144,7 +198,7 @@ paths:
       description: Retrieve details of a specific location.
       operationId: getLocationById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: location_id
           in: path
@@ -154,18 +208,18 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/LocationDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /master/v1/locations/changes:
     get:
@@ -175,7 +229,7 @@ paths:
       description: Retrieve incremental sync of location changes since a specific timestamp.
       operationId: getLocationChanges
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: updated_after
           in: query
@@ -184,20 +238,20 @@ paths:
           schema:
             type: string
             format: date-time
-            example: '2026-05-12T10:00:00Z'
+            example: "2026-05-12T10:00:00Z"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationChangesResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/LocationChangesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /master/v1/locations/validate:
     post:
@@ -207,28 +261,28 @@ paths:
       description: Validate a list of location IDs before creating a campaign.
       operationId: validateLocations
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationValidationRequest'
+              $ref: "#/components/schemas/LocationValidationRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationValidationResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/LocationValidationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /organizations/v1/sync:
     post:
@@ -238,28 +292,28 @@ paths:
       description: Synchronize a new organization from Patricia to consumer systems.
       operationId: syncOrganization
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationSyncRequest'
+              $ref: "#/components/schemas/OrganizationSyncRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationSyncResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/OrganizationSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /organizations/v1/{organization_id}:
     get:
@@ -269,7 +323,7 @@ paths:
       description: Retrieve details of a specific organization.
       operationId: getOrganizationById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: organization_id
           in: path
@@ -279,39 +333,39 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/OrganizationDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /organizations/v1/product-industry:
     get:
       tags:
         - Organization
       summary: Get product industry master
-      description: Retrieve the 4-level product industry hierarchy (Industry → Category → Sub-Category → Product).
+      description: Retrieve the 4-level product industry hierarchy (Industry -> Category -> Sub-Category -> Product).
       operationId: getProductIndustry
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductIndustryResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/ProductIndustryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /devices/v1/sync:
     post:
@@ -321,28 +375,28 @@ paths:
       description: Synchronize a new device after pairing is completed.
       operationId: syncDevice
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeviceSyncRequest'
+              $ref: "#/components/schemas/DeviceSyncRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceSyncResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /devices/v1/availability:
     get:
@@ -352,7 +406,7 @@ paths:
       description: Retrieve available devices for commercial inventory.
       operationId: getDeviceAvailability
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: location_id
           in: query
@@ -376,16 +430,16 @@ paths:
               - OFFLINE
               - ALL
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceAvailabilityResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceAvailabilityResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /devices/v1/health-check:
     post:
@@ -395,26 +449,26 @@ paths:
       description: Check online/offline status of multiple devices in bulk.
       operationId: bulkDeviceHealthCheck
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeviceHealthCheckRequest'
+              $ref: "#/components/schemas/DeviceHealthCheckRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceHealthCheckResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceHealthCheckResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /devices/v1/capabilities:
     get:
@@ -424,7 +478,7 @@ paths:
       description: Retrieve information about device capabilities.
       operationId: getDeviceCapabilities
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: device_id
           in: query
@@ -432,16 +486,16 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceCapabilitiesResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceCapabilitiesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /devices/v1/{device_id}:
     get:
@@ -451,7 +505,7 @@ paths:
       description: Retrieve details of a specific device.
       operationId: getDeviceById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: device_id
           in: path
@@ -460,18 +514,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/commercial:
     post:
@@ -480,47 +534,36 @@ paths:
       summary: Create commercial campaign
       description: |
         Inject a commercial campaign from consumer system to Patricia.
-        
+
         Campaign injection SUCCESS = Patricia accepted request + campaign persisted + MQTT distributed.
-        
-        Requires full HMAC-SHA256 verification.
+
+        Requires HMAC-MD5 signature validation via KrakenD gateway.
       operationId: createCommercialCampaign
       security:
-        - ApiKeyAuth: []
-      headers:
-        Idempotency-Key:
-          schema:
-            type: string
-            format: uuid
-          description: Prevent duplicate requests
-        X-Correlation-ID:
-          schema:
-            type: string
-            format: uuid
-          description: Request tracing
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateCampaignRequest'
+              $ref: "#/components/schemas/CreateCampaignRequest"
       responses:
-        '202':
+        "202":
           description: Campaign accepted for async processing
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateCampaignResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/CreateCampaignResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/commercial/{campaign_id}:
     put:
@@ -530,7 +573,7 @@ paths:
       description: Update an existing commercial campaign.
       operationId: updateCommercialCampaign
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: campaign_id
           in: path
@@ -543,24 +586,24 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateCampaignRequest'
+              $ref: "#/components/schemas/UpdateCampaignRequest"
       responses:
-        '200':
+        "200":
           description: Campaign updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UpdateCampaignResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/UpdateCampaignResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/commercial/{campaign_id}/cancel:
     post:
@@ -570,7 +613,7 @@ paths:
       description: Cancel an existing commercial campaign. This is an irreversible action.
       operationId: cancelCommercialCampaign
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: campaign_id
           in: path
@@ -587,24 +630,24 @@ paths:
                 reason:
                   type: string
                   description: Reason for cancellation
-                  example: 'Client requested cancellation'
+                  example: "Client requested cancellation"
       responses:
-        '200':
+        "200":
           description: Campaign cancelled successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancelCampaignResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/CancelCampaignResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/commercial/{campaign_id}/status:
     get:
@@ -614,7 +657,7 @@ paths:
       description: Check the distribution status of a campaign.
       operationId: getCampaignStatus
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: campaign_id
           in: path
@@ -623,18 +666,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignStatusResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/CampaignStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/commercial/status/bulk:
     post:
@@ -644,7 +687,7 @@ paths:
       description: Check the status of multiple campaigns in bulk.
       operationId: bulkCampaignStatus
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
@@ -663,18 +706,18 @@ paths:
                     - PAT-CMP-001
                     - PAT-CMP-002
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkCampaignStatusResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/BulkCampaignStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /campaigns/v1/replay:
     post:
@@ -684,7 +727,7 @@ paths:
       description: Retry distribution of a failed campaign.
       operationId: replayCampaign
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
@@ -698,7 +741,7 @@ paths:
                   type: string
                   description: Patricia campaign ID to replay
       responses:
-        '202':
+        "202":
           description: Replay accepted for processing
           content:
             application/json:
@@ -709,14 +752,14 @@ paths:
                     type: boolean
                   message:
                     type: string
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /showtimes/v1/categories:
     get:
@@ -726,18 +769,18 @@ paths:
       description: Retrieve all showtime categories.
       operationId: getShowtimeCategories
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShowtimeCategoriesResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/ShowtimeCategoriesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /showtimes/v1/categories/{showtime_id}:
     get:
@@ -747,7 +790,7 @@ paths:
       description: Retrieve details of a specific showtime category.
       operationId: getShowtimeCategoryById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: showtime_id
           in: path
@@ -756,18 +799,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShowtimeCategoryDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/ShowtimeCategoryDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /showtimes/v1/schedules:
     get:
@@ -777,18 +820,18 @@ paths:
       description: Retrieve all active showtime schedules.
       operationId: getShowtimeSchedules
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShowtimeSchedulesResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/ShowtimeSchedulesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /showtimes/v1/schedules/active:
     get:
@@ -798,39 +841,39 @@ paths:
       description: Retrieve showtime schedules that are currently active based on current time.
       operationId: getActiveShowtimeSchedules
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShowtimeSchedulesResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/ShowtimeSchedulesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /showtimes/v1/slots:
     get:
       tags:
         - Showtime
       summary: Get slot configuration
-      description: 'Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.'
+      description: "Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds."
       operationId: getSlotConfiguration
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SlotConfigResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/SlotConfigResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /rate-cards/v1:
     get:
@@ -840,7 +883,7 @@ paths:
       description: Retrieve all rate cards.
       operationId: getRateCards
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: active
           in: query
@@ -848,16 +891,16 @@ paths:
           schema:
             type: boolean
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/RateCardListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /rate-cards/v1/{rate_card_id}:
     get:
@@ -867,7 +910,7 @@ paths:
       description: Retrieve details of a specific rate card.
       operationId: getRateCardById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: rate_card_id
           in: path
@@ -876,18 +919,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/RateCardDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /rate-cards/v1/active:
     get:
@@ -897,18 +940,18 @@ paths:
       description: Retrieve all currently active rate cards.
       operationId: getActiveRateCards
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/RateCardListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /rate-cards/v1/validate:
     post:
@@ -918,28 +961,28 @@ paths:
       description: Validate a rate card for campaign pricing. Patricia provides base_price reference only.
       operationId: validateRateCard
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RateCardValidationRequest'
+              $ref: "#/components/schemas/RateCardValidationRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardValidationResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/RateCardValidationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /rate-cards/v1/changes:
     get:
@@ -949,7 +992,7 @@ paths:
       description: Retrieve incremental sync of rate card changes since a specific timestamp.
       operationId: getRateCardChanges
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: updated_after
           in: query
@@ -958,20 +1001,20 @@ paths:
           schema:
             type: string
             format: date-time
-            example: '2026-05-12T10:00:00Z'
+            example: "2026-05-12T10:00:00Z"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardChangesResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/RateCardChangesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /inventories/v1/slots:
     get:
@@ -981,7 +1024,7 @@ paths:
       description: Retrieve all inventory slots.
       operationId: getInventorySlots
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: location_id
           in: query
@@ -995,16 +1038,16 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InventorySlotsResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/InventorySlotsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /inventories/v1/slots/availability:
     get:
@@ -1014,7 +1057,7 @@ paths:
       description: Retrieve slot availability based on time window.
       operationId: getSlotAvailability
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: location_ids
           in: query
@@ -1039,18 +1082,18 @@ paths:
             type: string
             format: date
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SlotAvailabilityResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/SlotAvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /inventories/v1/slots/check:
     post:
@@ -1060,28 +1103,28 @@ paths:
       description: Check slot availability before booking. Returns available slots with base_price per showtime.
       operationId: checkSlotAvailability
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CheckSlotAvailabilityRequest'
+              $ref: "#/components/schemas/CheckSlotAvailabilityRequest"
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckSlotAvailabilityResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/CheckSlotAvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /inventories/v1/slots/{slot_id}:
     get:
@@ -1091,7 +1134,7 @@ paths:
       description: Retrieve details of a specific inventory slot.
       operationId: getInventorySlotById
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       parameters:
         - name: slot_id
           in: path
@@ -1100,18 +1143,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InventorySlotDetailResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/InventorySlotDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /health/v1/integration:
     get:
@@ -1121,16 +1164,16 @@ paths:
       description: Check the health status of Patricia integration services.
       operationId: getIntegrationHealth
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/HealthResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /health/v1/mqtt:
     get:
@@ -1140,16 +1183,16 @@ paths:
       description: Check MQTT broker connectivity status.
       operationId: getMqttHealth
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MqttHealthResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/MqttHealthResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /health/v1/devices:
     get:
@@ -1159,16 +1202,16 @@ paths:
       description: Get summary of device health status.
       operationId: getDeviceHealthSummary
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeviceHealthSummaryResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/DeviceHealthSummaryResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /health/v1/storage:
     get:
@@ -1178,57 +1221,76 @@ paths:
       description: Check AWS S3 storage accessibility.
       operationId: getStorageHealth
       security:
-        - ApiKeyAuth: []
+        - HmacAuth: []
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageHealthResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/StorageHealthResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
 components:
   securitySchemes:
-    ApiKeyAuth:
+    HmacAuth:
       type: apiKey
       in: header
-      name: X-API-Key
+      name: X-Signature
       description: |
-        Public API key for HMAC-SHA256 request signing.
-        Required headers: X-API-Key, X-Channel-ID, X-Timestamp, X-Signature, X-Nonce
+        HMAC-MD5 signature authentication via KrakenD gateway plugin.
+
+        **Signature Scheme:**
+        ```
+        X-Signature = hex(HMAC-MD5(apiKey + secretKey + timestamp))
+        ```
+
+        **Required Headers (POST/PUT/DELETE):**
+        - `ChannelId`: Integration channel identifier (e.g., G21)
+        - `Api_key`: Public API key
+        - `X-Timestamp`: Unix epoch timestamp in seconds
+        - `X-Signature`: Hex-encoded HMAC-MD5 signature
+
+        **Required Query Parameters (GET):**
+        - `channel_id`: Integration channel identifier
+        - `api_key`: Public API key
+        - `x_timestamp`: Unix epoch timestamp in seconds
+        - `x_signature`: Hex-encoded HMAC-MD5 signature
+
+        **Clock Skew:** 300 seconds (5 minutes)
+
+        **Example (POST):**
+        ```bash
+        TIMESTAMP=$(date +%s)
+        API_KEY="xxxx"
+        SECRET_KEY="secret-key-1"
+        SIGNATURE=$(echo -n "${API_KEY}${SECRET_KEY}${TIMESTAMP}" | openssl dgst -md5 -hmac "${SECRET_KEY}" -hex | awk '{print $NF}')
+
+        curl -X POST https://api.patricia.io/campaigns/v1/commercial \
+          -H "ChannelId: G21" \
+          -H "Api_key: ${API_KEY}" \
+          -H "X-Timestamp: ${TIMESTAMP}" \
+          -H "X-Signature: ${SIGNATURE}" \
+          -H "Content-Type: application/json" \
+          -d '{"external_campaign_id":"GEN21-CMP-001",...}'
+        ```
+
+        **Example (GET):**
+        ```bash
+        curl "https://api.patricia.io/master/v1/locations/hierarchy?channel_id=G21&api_key=${API_KEY}&x_timestamp=${TIMESTAMP}&x_signature=${SIGNATURE}"
+        ```
 
   schemas:
-    # Common Response Envelope
-    BaseResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          description: Indicates if the request was successful
-        error_code:
-          type: string
-          description: Error code if request failed
-        error_message:
-          type: string
-          description: Human-readable error message
-
-    # Error Response
     ErrorResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: false
-        error_code:
+        error:
           type: string
-          example: VER40104
-        error_message:
-          type: string
-          example: Signature mismatch
+          description: Error message
+      example:
+        error: invalid signature
 
-    # Location Schemas
     Location:
       type: object
       properties:
@@ -1236,11 +1298,11 @@ components:
           type: string
           format: uuid
           description: UUID of the location
-          example: 'CITY-001'
+          example: CITY-001
         name:
           type: string
           description: Name of the location
-          example: 'Bandung'
+          example: Bandung
         type:
           type: string
           enum:
@@ -1250,7 +1312,7 @@ components:
         timezone:
           type: string
           description: IANA timezone identifier
-          example: 'Asia/Jakarta'
+          example: Asia/Jakarta
         parent_id:
           type: string
           format: uuid
@@ -1258,30 +1320,42 @@ components:
         children:
           type: array
           items:
-            $ref: '#/components/schemas/Location'
+            $ref: "#/components/schemas/Location"
           description: Child locations (for hierarchy)
 
     LocationHierarchyResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: MST20000
+            message:
+              type: string
+              example: Location hierarchy successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Location'
+            $ref: "#/components/schemas/Location"
 
     LocationListResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: MST20001
+            message:
+              type: string
+              example: Locations successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Location'
+            $ref: "#/components/schemas/Location"
         pagination:
           type: object
           properties:
@@ -1295,18 +1369,30 @@ components:
     LocationDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: MST20002
+            message:
+              type: string
+              example: Location details successfully retrieved
         data:
-          $ref: '#/components/schemas/Location'
+          $ref: "#/components/schemas/Location"
 
     LocationChangesResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: MST20003
+            message:
+              type: string
+              example: Location changes successfully retrieved
         data:
           type: array
           items:
@@ -1325,7 +1411,7 @@ components:
                 type: string
                 format: date-time
               data:
-                $ref: '#/components/schemas/Location'
+                $ref: "#/components/schemas/Location"
 
     LocationValidationRequest:
       type: object
@@ -1342,23 +1428,27 @@ components:
     LocationValidationResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        valid:
-          type: boolean
-          description: Whether all locations are valid
-        invalid_locations:
-          type: array
-          items:
-            type: object
-            properties:
-              location_id:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: MST20004
+            message:
+              type: string
+              example: Location validation completed
+        data:
+          type: object
+          properties:
+            valid_locations:
+              type: array
+              items:
                 type: string
-              reason:
+            invalid_locations:
+              type: array
+              items:
                 type: string
 
-    # Organization Schemas
     OrganizationSyncRequest:
       type: object
       required:
@@ -1369,15 +1459,15 @@ components:
           type: string
           format: uuid
           description: UUID of the organization
-          example: 'ORG-001'
+          example: ORG-001
         organization_name:
           type: string
           description: Legal name of the organization
-          example: 'ABC Corp'
+          example: ABC Corp
         brand_name:
           type: string
           description: Brand/trading name
-          example: 'ABC'
+          example: ABC
         industry_id:
           type: string
           description: Product industry classification ID
@@ -1385,20 +1475,35 @@ components:
     OrganizationSyncResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        external_client_id:
-          type: string
-          description: Client ID assigned by consumer system
-          example: 'GEN21-CLI-001'
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ORG20000
+            message:
+              type: string
+              example: Organization synced successfully
+        data:
+          type: object
+          properties:
+            external_client_id:
+              type: string
+              description: Client ID assigned by consumer system
+              example: GEN21-CLI-001
 
     OrganizationDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ORG20001
+            message:
+              type: string
+              example: Organization details successfully retrieved
         data:
           type: object
           properties:
@@ -1421,9 +1526,15 @@ components:
     ProductIndustryResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ORG20002
+            message:
+              type: string
+              example: Product industry data successfully retrieved
         data:
           type: array
           items:
@@ -1461,14 +1572,13 @@ components:
                                 product_name:
                                   type: string
 
-    # Device Schemas
     DeviceCapabilities:
       type: object
       properties:
         max_resolution:
           type: string
           description: Maximum display resolution
-          example: '1920x1080'
+          example: 1920x1080
         video_codec:
           type: array
           items:
@@ -1498,21 +1608,21 @@ components:
         device_id:
           type: string
           description: Unique device identifier
-          example: 'DEV-001'
+          example: DEV-001
         device_label:
           type: string
           description: Human-readable device label
-          example: 'Lobby TV'
+          example: Lobby TV
         organization_id:
           type: string
           format: uuid
           description: Owning organization ID
-          example: 'ORG-001'
+          example: ORG-001
         location_id:
           type: string
           format: uuid
           description: Location ID where device is installed
-          example: 'CITY-001'
+          example: CITY-001
         latitude:
           type: number
           format: double
@@ -1524,51 +1634,52 @@ components:
           description: GPS longitude
           example: 106.123
         capabilities:
-          $ref: '#/components/schemas/DeviceCapabilities'
+          $ref: "#/components/schemas/DeviceCapabilities"
 
     DeviceSyncResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        inventory_status:
-          type: string
-          enum:
-            - ACTIVE
-            - PENDING
-            - INACTIVE
-          example: 'ACTIVE'
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: DEV20000
+            message:
+              type: string
+              example: Device synced successfully
+        data:
+          type: object
+          properties:
+            inventory_status:
+              type: string
+              enum:
+                - ACTIVE
+                - PENDING
+                - INACTIVE
+              example: ACTIVE
 
     DeviceAvailabilityResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: DEV20001
+            message:
+              type: string
+              example: Device availability successfully retrieved
         data:
-          type: array
-          items:
-            type: object
-            properties:
-              device_id:
-                type: string
-              device_label:
-                type: string
-              organization_id:
-                type: string
-                format: uuid
-              location_id:
-                type: string
-                format: uuid
-              status:
-                type: string
-                enum:
-                  - ONLINE
-                  - OFFLINE
-              last_seen:
-                type: string
-                format: date-time
+          type: object
+          properties:
+            available_devices:
+              type: integer
+            total_devices:
+              type: integer
+            unavailable_devices:
+              type: integer
 
     DeviceHealthCheckRequest:
       type: object
@@ -1582,9 +1693,15 @@ components:
     DeviceHealthCheckResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: DEV20002
+            message:
+              type: string
+              example: Device health check completed
         data:
           type: array
           items:
@@ -1592,7 +1709,7 @@ components:
             properties:
               device_id:
                 type: string
-              connection_status:
+              status:
                 type: string
                 enum:
                   - ONLINE
@@ -1604,25 +1721,39 @@ components:
     DeviceCapabilitiesResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: DEV20003
+            message:
+              type: string
+              example: Device capabilities successfully retrieved
         data:
           type: array
           items:
             type: object
             properties:
-              device_id:
+              capability_id:
                 type: string
-              capabilities:
-                $ref: '#/components/schemas/DeviceCapabilities'
+              capability_name:
+                type: string
+              description:
+                type: string
 
     DeviceDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: DEV20004
+            message:
+              type: string
+              example: Device details successfully retrieved
         data:
           type: object
           properties:
@@ -1643,10 +1774,10 @@ components:
             status:
               type: string
               enum:
-                - ONLINE
-                - OFFLINE
+                - ACTIVE
+                - INACTIVE
             capabilities:
-              $ref: '#/components/schemas/DeviceCapabilities'
+              $ref: "#/components/schemas/DeviceCapabilities"
             created_at:
               type: string
               format: date-time
@@ -1654,7 +1785,6 @@ components:
               type: string
               format: date-time
 
-    # Campaign Schemas
     CampaignSchedule:
       type: object
       required:
@@ -1665,16 +1795,16 @@ components:
           type: string
           format: date-time
           description: Campaign start time (ISO8601 UTC)
-          example: '2026-05-12T00:00:00Z'
+          example: "2026-05-12T00:00:00Z"
         end_at:
           type: string
           format: date-time
           description: Campaign end time (ISO8601 UTC)
-          example: '2026-05-20T00:00:00Z'
+          example: "2026-05-20T00:00:00Z"
         timezone:
           type: string
           description: IANA timezone for scheduling
-          example: 'Asia/Jakarta'
+          example: Asia/Jakarta
 
     CampaignTarget:
       type: object
@@ -1691,7 +1821,7 @@ components:
             format: uuid
           description: Location IDs to target (optional if device_ids provided)
           example:
-            - 'CITY-001'
+            - CITY-001
 
     CampaignMedia:
       type: object
@@ -1704,7 +1834,7 @@ components:
         media_id:
           type: string
           description: Unique media identifier
-          example: 'MEDIA-001'
+          example: MEDIA-001
         media_type:
           type: string
           enum:
@@ -1715,11 +1845,11 @@ components:
           type: string
           format: uri
           description: URL to download the media asset
-          example: 'https://s3.amazonaws.com/bucket/media.mp4'
+          example: https://s3.amazonaws.com/bucket/media.mp4
         sha256:
           type: string
           description: SHA-256 hash of the media file for integrity verification
-          example: 'a1b2c3d4e5f6...'
+          example: xxxxx
         duration_seconds:
           type: integer
           description: Duration of the media in seconds
@@ -1742,28 +1872,28 @@ components:
         external_campaign_id:
           type: string
           description: Campaign ID from the external system
-          example: 'GEN21-CMP-001'
+          example: GEN21-CMP-001
         campaign_name:
           type: string
           description: Human-readable campaign name
-          example: 'Promo Ramadhan'
+          example: Promo Ramadhan
         organization_id:
           type: string
           format: uuid
           description: Owning organization ID
-          example: 'ORG-001'
+          example: ORG-001
         priority:
           type: integer
           description: Campaign priority (1 = highest)
           example: 1
         schedule:
-          $ref: '#/components/schemas/CampaignSchedule'
+          $ref: "#/components/schemas/CampaignSchedule"
         targets:
-          $ref: '#/components/schemas/CampaignTarget'
+          $ref: "#/components/schemas/CampaignTarget"
         media:
           type: array
           items:
-            $ref: '#/components/schemas/CampaignMedia'
+            $ref: "#/components/schemas/CampaignMedia"
           minItems: 1
         timeshow_percent:
           type: integer
@@ -1775,29 +1905,38 @@ components:
     CreateCampaignResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        campaign_id:
-          type: string
-          description: Patricia-assigned campaign ID
-          example: 'PAT-CMP-001'
         status:
-          type: string
-          enum:
-            - ACCEPTED
-            - PROCESSING
-            - DISTRIBUTED
-            - DOWNLOADED
-            - ACTIVE
-            - COMPLETED
-            - FAILED
-            - CANCELLED
-          example: 'ACCEPTED'
-        accepted_at:
-          type: string
-          format: date-time
-          example: '2026-05-12T10:00:00Z'
+          type: object
+          properties:
+            code:
+              type: string
+              example: CMP20000
+            message:
+              type: string
+              example: Campaign created successfully
+        data:
+          type: object
+          properties:
+            campaign_id:
+              type: string
+              description: Patricia-assigned campaign ID
+              example: PAT-CMP-001
+            status:
+              type: string
+              enum:
+                - ACCEPTED
+                - PROCESSING
+                - DISTRIBUTED
+                - DOWNLOADED
+                - ACTIVE
+                - COMPLETED
+                - FAILED
+                - CANCELLED
+              example: ACCEPTED
+            accepted_at:
+              type: string
+              format: date-time
+              example: "2026-05-12T10:00:00Z"
 
     UpdateCampaignRequest:
       type: object
@@ -1807,9 +1946,9 @@ components:
         priority:
           type: integer
         schedule:
-          $ref: '#/components/schemas/CampaignSchedule'
+          $ref: "#/components/schemas/CampaignSchedule"
         targets:
-          $ref: '#/components/schemas/CampaignTarget'
+          $ref: "#/components/schemas/CampaignTarget"
         timeshow_percent:
           type: integer
           minimum: 0
@@ -1818,38 +1957,62 @@ components:
     UpdateCampaignResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        campaign_id:
-          type: string
         status:
-          type: string
-        updated_at:
-          type: string
-          format: date-time
+          type: object
+          properties:
+            code:
+              type: string
+              example: CMP20001
+            message:
+              type: string
+              example: Campaign updated successfully
+        data:
+          type: object
+          properties:
+            campaign_id:
+              type: string
+            status:
+              type: string
+            updated_at:
+              type: string
+              format: date-time
 
     CancelCampaignResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        campaign_id:
-          type: string
         status:
-          type: string
-          example: 'CANCELLED'
-        cancelled_at:
-          type: string
-          format: date-time
+          type: object
+          properties:
+            code:
+              type: string
+              example: CMP20002
+            message:
+              type: string
+              example: Campaign cancelled successfully
+        data:
+          type: object
+          properties:
+            campaign_id:
+              type: string
+            status:
+              type: string
+              example: CANCELLED
+            cancelled_at:
+              type: string
+              format: date-time
 
     CampaignStatusResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: CMP20003
+            message:
+              type: string
+              example: Campaign status successfully retrieved
         data:
           type: object
           properties:
@@ -1868,25 +2031,40 @@ components:
                 - COMPLETED
                 - FAILED
                 - CANCELLED
-            distribution_progress:
+            progress:
               type: object
               properties:
+                distributed_devices:
+                  type: integer
                 total_devices:
                   type: integer
-                distributed_to:
+                completion_percentage:
                   type: integer
-                failed:
-                  type: integer
-            updated_at:
-              type: string
-              format: date-time
+            timestamps:
+              type: object
+              properties:
+                accepted_at:
+                  type: string
+                  format: date-time
+                processing_started_at:
+                  type: string
+                  format: date-time
+                distributed_at:
+                  type: string
+                  format: date-time
 
     BulkCampaignStatusResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: CMP20004
+            message:
+              type: string
+              example: Bulk campaign status retrieved
         data:
           type: array
           items:
@@ -1900,22 +2078,21 @@ components:
                 type: string
                 format: date-time
 
-    # Showtime Schemas
     ShowtimeCategory:
       type: object
       properties:
         showtime_id:
           type: string
-          example: 'SHOW-001'
+          example: SHOW-001
         showtime_code:
           type: string
-          example: 'PRIME_TIME'
+          example: PRIME_TIME
         showtime_name:
           type: string
-          example: 'Prime Time'
+          example: Prime Time
         description:
           type: string
-          example: 'Jam tayang premium'
+          example: Jam tayang premium
         priority:
           type: integer
           description: Priority level (1 = highest)
@@ -1927,32 +2104,44 @@ components:
     ShowtimeCategoriesResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SHW20000
+            message:
+              type: string
+              example: Showtime categories successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ShowtimeCategory'
+            $ref: "#/components/schemas/ShowtimeCategory"
 
     ShowtimeCategoryDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SHW20001
+            message:
+              type: string
+              example: Showtime category details successfully retrieved
         data:
-          $ref: '#/components/schemas/ShowtimeCategory'
+          $ref: "#/components/schemas/ShowtimeCategory"
 
     ShowtimeSchedule:
       type: object
       properties:
         schedule_id:
           type: string
-          example: 'SCH-001'
+          example: SCH-001
         showtime_id:
           type: string
-          example: 'SHOW-001'
+          example: SHOW-001
         days:
           type: array
           items:
@@ -1972,14 +2161,14 @@ components:
         start_time:
           type: string
           description: Schedule start time (HH:mm:ss)
-          example: '18:00:00'
+          example: "18:00:00"
         end_time:
           type: string
           description: Schedule end time (HH:mm:ss)
-          example: '22:00:00'
+          example: "22:00:00"
         timezone:
           type: string
-          example: 'Asia/Jakarta'
+          example: Asia/Jakarta
         slot_duration_seconds:
           type: integer
           description: Duration of each slot in seconds
@@ -1988,55 +2177,66 @@ components:
     ShowtimeSchedulesResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SHW20002
+            message:
+              type: string
+              example: Showtime schedules successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ShowtimeSchedule'
+            $ref: "#/components/schemas/ShowtimeSchedule"
 
     SlotConfigResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        data:
+        status:
           type: object
           properties:
-            slot_duration_seconds:
-              type: integer
-              description: 'Standard slot duration (per STO agreement: 30 seconds)'
-              example: 30
-            slots_per_organization:
-              type: integer
-              description: 'Total slots per organization (per STO agreement: 120)'
-              example: 120
+            code:
+              type: string
+              example: SHW20004
+            message:
+              type: string
+              example: Showtime slot configuration successfully retrieved
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              slot_id:
+                type: string
+              showtime_id:
+                type: string
+              duration_seconds:
+                type: integer
+                description: Standard slot duration (per STO agreement: 30 seconds)
+                example: 30
+              description:
+                type: string
 
-    # Rate Card Schemas
     RateCard:
       type: object
       properties:
         rate_card_id:
           type: string
-          example: 'RATE-001'
+          example: RATE-001
         showtime_id:
           type: string
-          example: 'SHOW-001'
+          example: SHOW-001
         showtime_code:
           type: string
-          example: 'PRIME_TIME'
-        location_id:
-          type: string
-          format: uuid
-          example: 'CITY-001'
+          example: PRIME_TIME
         slot_duration_seconds:
           type: integer
           example: 30
         currency:
           type: string
-          example: 'IDR'
+          example: IDR
         base_price:
           type: number
           format: double
@@ -2045,11 +2245,11 @@ components:
         effective_start_date:
           type: string
           format: date
-          example: '2026-05-01'
+          example: "2026-05-01"
         effective_end_date:
           type: string
           format: date
-          example: '2026-12-31'
+          example: "2026-12-31"
         active:
           type: boolean
           example: true
@@ -2057,37 +2257,44 @@ components:
     RateCardListResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RTC20000
+            message:
+              type: string
+              example: Rate cards successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/RateCard'
+            $ref: "#/components/schemas/RateCard"
 
     RateCardDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RTC20001
+            message:
+              type: string
+              example: Rate card details successfully retrieved
         data:
-          $ref: '#/components/schemas/RateCard'
+          $ref: "#/components/schemas/RateCard"
 
     RateCardValidationRequest:
       type: object
       required:
-        - location_id
         - showtime_id
         - campaign_duration_days
       properties:
-        location_id:
-          type: string
-          format: uuid
-          example: 'CITY-001'
         showtime_id:
           type: string
-          example: 'SHOW-001'
+          example: SHOW-001
         campaign_duration_days:
           type: integer
           example: 7
@@ -2098,29 +2305,44 @@ components:
     RateCardValidationResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        valid:
-          type: boolean
-          description: Whether a matching rate card exists
-        matched_rate_card:
+        status:
           type: object
           properties:
-            rate_card_id:
+            code:
               type: string
-            base_price:
-              type: number
-              format: double
-            currency:
+              example: RTC20003
+            message:
               type: string
+              example: Rate card validation successful
+        data:
+          type: object
+          properties:
+            valid:
+              type: boolean
+              description: Whether a matching rate card exists
+            matched_rate_card:
+              type: object
+              properties:
+                rate_card_id:
+                  type: string
+                base_price:
+                  type: number
+                  format: double
+                currency:
+                  type: string
 
     RateCardChangesResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RTC20004
+            message:
+              type: string
+              example: Rate card changes successfully retrieved
         data:
           type: array
           items:
@@ -2128,71 +2350,133 @@ components:
             properties:
               rate_card_id:
                 type: string
-              change_type:
+              operation:
                 type: string
                 enum:
-                  - CREATED
-                  - UPDATED
-                  - DELETED
+                  - CREATE
+                  - UPDATE
+                  - DELETE
               updated_at:
                 type: string
                 format: date-time
-              data:
-                $ref: '#/components/schemas/RateCard'
 
-    # Inventory Slot Schemas
     InventorySlot:
       type: object
       properties:
         slot_id:
-          type: string
-        device_id:
           type: string
         location_id:
           type: string
           format: uuid
         showtime_id:
           type: string
+        showtime_code:
+          type: string
+        date:
+          type: string
+          format: date
+        start_time:
+          type: string
+        end_time:
+          type: string
+        timezone:
+          type: string
         slot_duration_seconds:
           type: integer
           example: 30
-        organization_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum:
-            - AVAILABLE
-            - RESERVED
-            - BOOKED
-            - UNAVAILABLE
+        available:
+          type: boolean
+        reserved:
+          type: boolean
+        pricing:
+          type: object
+          properties:
+            base_price:
+              type: number
+              format: double
+            currency:
+              type: string
 
     InventorySlotsResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INV20000
+            message:
+              type: string
+              example: Inventory slots successfully retrieved
         data:
           type: array
           items:
-            $ref: '#/components/schemas/InventorySlot'
+            $ref: "#/components/schemas/InventorySlot"
 
     SlotAvailabilityResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        available_slots:
-          type: integer
-          example: 80
-        reserved_slots:
-          type: integer
-          example: 20
-        total_slots:
-          type: integer
-          example: 120
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INV20001
+            message:
+              type: string
+              example: Slot availability successfully retrieved
+        data:
+          type: object
+          properties:
+            summary:
+              type: object
+              properties:
+                available_slots:
+                  type: integer
+                  example: 80
+                reserved_slots:
+                  type: integer
+                  example: 20
+                total_slots:
+                  type: integer
+                  example: 120
+            by_location:
+              type: array
+              items:
+                type: object
+                properties:
+                  location_id:
+                    type: string
+                  available_slots:
+                    type: integer
+                  reserved_slots:
+                    type: integer
+                  total_slots:
+                    type: integer
+            by_showtime:
+              type: array
+              items:
+                type: object
+                properties:
+                  showtime_id:
+                    type: string
+                  showtime_code:
+                    type: string
+                  available_slots:
+                    type: integer
+                  reserved_slots:
+                    type: integer
+                  total_slots:
+                    type: integer
+                  pricing:
+                    type: object
+                    properties:
+                      base_price:
+                        type: number
+                        format: double
+                      currency:
+                        type: string
 
     CheckSlotAvailabilityRequest:
       type: object
@@ -2208,140 +2492,287 @@ components:
             type: string
             format: uuid
           example:
-            - 'CITY-001'
+            - CITY-001
         showtime_id:
           type: string
-          example: 'SHOW-001'
+          example: SHOW-001
         start_date:
           type: string
           format: date
-          example: '2026-05-12'
+          example: "2026-05-12"
         end_date:
           type: string
           format: date
-          example: '2026-05-20'
+          example: "2026-05-20"
 
     CheckSlotAvailabilityResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
-        available_slots:
-          type: integer
-          description: Number of available slots
-          example: 80
-        reserved_slots:
-          type: integer
-          description: Number of reserved slots
-          example: 20
-        total_slots:
-          type: integer
-          description: Total number of slots
-          example: 120
-        base_price_per_slot:
-          type: number
-          format: double
-          description: Base price per slot from rate card (reference only)
-          example: 150000
-        currency:
-          type: string
-          example: 'IDR'
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INV20002
+            message:
+              type: string
+              example: Slot availability check completed
+        data:
+          type: object
+          properties:
+            available_slots:
+              type: integer
+              description: Number of available slots
+              example: 80
+            reserved_slots:
+              type: integer
+              description: Number of reserved slots
+              example: 20
+            total_slots:
+              type: integer
+              description: Total number of slots
+              example: 120
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  available_slots:
+                    type: integer
+                  reserved_slots:
+                    type: integer
+                  total_slots:
+                    type: integer
+            by_showtime:
+              type: array
+              items:
+                type: object
+                properties:
+                  showtime_id:
+                    type: string
+                  showtime_code:
+                    type: string
+                  available_slots:
+                    type: integer
+                  reserved_slots:
+                    type: integer
+                  total_slots:
+                    type: integer
+                  pricing:
+                    type: object
+                    properties:
+                      base_price:
+                        type: number
+                        format: double
+                      currency:
+                        type: string
 
     InventorySlotDetailResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INV20003
+            message:
+              type: string
+              example: Inventory slot details successfully retrieved
         data:
-          $ref: '#/components/schemas/InventorySlot'
+          type: object
+          properties:
+            slot_id:
+              type: string
+            location_id:
+              type: string
+              format: uuid
+            showtime_id:
+              type: string
+            date:
+              type: string
+              format: date
+            start_time:
+              type: string
+            end_time:
+              type: string
+            timezone:
+              type: string
+            slot_duration_seconds:
+              type: integer
+              example: 30
+            available:
+              type: boolean
+            reserved:
+              type: boolean
+            reservation_id:
+              type: string
+              nullable: true
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
 
-    # Health Schemas
     HealthResponse:
       type: object
       properties:
         status:
-          type: string
-          example: 'healthy'
-        services:
           type: object
           properties:
-            api:
+            code:
+              type: string
+              example: HLT20000
+            message:
+              type: string
+              example: Integration health status retrieved
+        data:
+          type: object
+          properties:
+            status:
               type: string
               enum:
-                - healthy
-                - degraded
-                - unhealthy
-            database:
+                - HEALTHY
+                - DEGRADED
+                - UNHEALTHY
+              example: HEALTHY
+            components:
+              type: object
+              properties:
+                database:
+                  type: string
+                  enum:
+                    - CONNECTED
+                    - DISCONNECTED
+                mqtt_broker:
+                  type: string
+                  enum:
+                    - CONNECTED
+                    - DISCONNECTED
+                storage:
+                  type: string
+                  enum:
+                    - ACCESSIBLE
+                    - INACCESSIBLE
+                api_gateway:
+                  type: string
+                  enum:
+                    - OPERATIONAL
+                    - DEGRADED
+            last_checked:
               type: string
-              enum:
-                - healthy
-                - degraded
-                - unhealthy
-            mqtt:
-              type: string
-              enum:
-                - healthy
-                - degraded
-                - unhealthy
-            storage:
-              type: string
-              enum:
-                - healthy
-                - degraded
-                - unhealthy
-        timestamp:
-          type: string
-          format: date-time
+              format: date-time
+            uptime_percentage:
+              type: number
+              format: double
 
     MqttHealthResponse:
       type: object
       properties:
         status:
-          type: string
-          enum:
-            - connected
-            - disconnected
-            - degraded
-        broker_url:
-          type: string
-        connected_clients:
-          type: integer
-        timestamp:
-          type: string
-          format: date-time
+          type: object
+          properties:
+            code:
+              type: string
+              example: HLT20001
+            message:
+              type: string
+              example: MQTT broker status retrieved
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum:
+                - CONNECTED
+                - DISCONNECTED
+            broker_url:
+              type: string
+            connection_count:
+              type: integer
+            last_connected:
+              type: string
+              format: date-time
 
     DeviceHealthSummaryResponse:
       type: object
       properties:
-        total_devices:
-          type: integer
-        online_devices:
-          type: integer
-        offline_devices:
-          type: integer
-        last_checked:
-          type: string
-          format: date-time
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: HLT20002
+            message:
+              type: string
+              example: Device health summary retrieved
+        data:
+          type: object
+          properties:
+            summary:
+              type: object
+              properties:
+                total_devices:
+                  type: integer
+                online_devices:
+                  type: integer
+                offline_devices:
+                  type: integer
+                healthy_devices:
+                  type: integer
+                unhealthy_devices:
+                  type: integer
+            by_location:
+              type: array
+              items:
+                type: object
+                properties:
+                  location_id:
+                    type: string
+                  online:
+                    type: integer
+                  offline:
+                    type: integer
+                  healthy:
+                    type: integer
+                  unhealthy:
+                    type: integer
 
     StorageHealthResponse:
       type: object
       properties:
         status:
-          type: string
-          enum:
-            - accessible
-            - inaccessible
-            - degraded
-        provider:
-          type: string
-          example: 'AWS S3'
-        bucket:
-          type: string
-        last_checked:
-          type: string
-          format: date-time
+          type: object
+          properties:
+            code:
+              type: string
+              example: HLT20003
+            message:
+              type: string
+              example: Storage accessibility status retrieved
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum:
+                - ACCESSIBLE
+                - INACCESSIBLE
+            storage_provider:
+              type: string
+              example: AWS S3
+            region:
+              type: string
+              example: ap-southeast-1
+            last_access:
+              type: string
+              format: date-time
+            response_time_ms:
+              type: integer
 
   responses:
     BadRequest:
@@ -2349,85 +2780,68 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
-            success: false
-            error_code: '400'
-            error_message: 'Invalid request payload'
+            error: Invalid request payload
 
     Unauthorized:
       description: Authentication failed
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           examples:
-            missingHeader:
+            invalidCredentials:
               value:
-                success: false
-                error_code: VER40001
-                error_message: Missing required verification headers
-            invalidApiKey:
+                error: invalid credentials
+            requestExpired:
               value:
-                success: false
-                error_code: VER40101
-                error_message: Invalid API key
-            expiredRequest:
+                error: request expired
+            invalidSignature:
               value:
-                success: false
-                error_code: VER40102
-                error_message: Request timestamp expired
-            duplicateNonce:
-              value:
-                success: false
-                error_code: VER40103
-                error_message: Duplicate nonce detected
-            signatureMismatch:
-              value:
-                success: false
-                error_code: VER40104
-                error_message: Signature mismatch
+                error: invalid signature
+
+    Forbidden:
+      description: Endpoint not authorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: endpoint not authorized
 
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
-            success: false
-            error_code: '404'
-            error_message: Resource not found
+            error: Resource not found
 
     Conflict:
       description: Duplicate conflict
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
-            success: false
-            error_code: '409'
-            error_message: Resource already exists
+            error: Resource already exists
 
     ValidationError:
       description: Business validation failed
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
-            success: false
-            error_code: '422'
-            error_message: Business validation failed
+            error: Business validation failed
 
     InternalError:
       description: Internal server error
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
-            success: false
-            error_code: '500'
-            error_message: Internal server error
+            error: Internal server error
