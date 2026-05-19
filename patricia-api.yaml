@@ -84,13 +84,11 @@ info:
     name: Patricia API Support
   license:
     name: Proprietary
-
 servers:
   - url: https://api.patricia.co.id
     description: Production
   - url: https://api.patricia.kubesnp.salt.id
     description: Staging
-
 tags:
   - name: Master Data
     description: Location hierarchy and master data (Patricia = Source of Truth)
@@ -108,14 +106,31 @@ tags:
     description: Slot availability and booking
   - name: Health
     description: System health and operational monitoring
-
 paths:
   /master/v1/locations/hierarchy:
     get:
       tags:
         - Master Data
       summary: Get full location hierarchy
-      description: Retrieve the complete location hierarchy from Province to City level.
+      description: |-
+        Retrieve the complete location hierarchy from Province to City level.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as LocationUseCase
+            participant Repo as LocationRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /master/v1/locations/hierarchy
+            API->>UseCase: GetLocationHierarchy()
+            UseCase->>Repo: GetFullHierarchy()
+            Repo->>PostgreSQL: SELECT hierarchical location data
+            PostgreSQL-->>Repo: location hierarchy
+            Repo-->>UseCase: LocationHierarchy
+            UseCase-->>API: LocationHierarchyResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getLocationHierarchy
       security:
         - HmacAuth: []
@@ -130,13 +145,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /master/v1/locations:
     get:
       tags:
         - Master Data
       summary: Get flat list of locations
-      description: Retrieve a flat list of all locations.
+      description: |-
+        Retrieve a flat list of all locations.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as LocationUseCase
+            participant Repo as LocationRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /master/v1/locations
+            API->>UseCase: GetLocationsList()
+            UseCase->>Repo: GetFlatLocations()
+            Repo->>PostgreSQL: SELECT flat location data
+            PostgreSQL-->>Repo: locations list
+            Repo-->>UseCase: []Location
+            UseCase-->>API: LocationsListResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getLocations
       security:
         - HmacAuth: []
@@ -173,13 +205,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /master/v1/locations/{location_id}:
     get:
       tags:
         - Master Data
       summary: Get location details
-      description: Retrieve details of a specific location.
+      description: |-
+        Retrieve details of a specific location.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as LocationUseCase
+            participant Repo as LocationRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /master/v1/locations/{location_id}
+            API->>UseCase: GetLocationById(locationId)
+            UseCase->>Repo: FindById(locationId)
+            Repo->>PostgreSQL: SELECT WHERE location_id = ?
+            PostgreSQL-->>Repo: location or null
+            Repo-->>UseCase: Location or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: LocationResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getLocationById
       security:
         - HmacAuth: []
@@ -198,19 +248,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocationDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /master/v1/locations/changes:
     get:
       tags:
         - Master Data
       summary: Get incremental location changes
-      description: Retrieve incremental sync of location changes since a specific timestamp.
+      description: |-
+        Retrieve incremental sync of location changes since a specific timestamp.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as LocationUseCase
+            participant Repo as LocationRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /master/v1/locations/changes?updated_after=
+            API->>UseCase: GetChangedLocations(updatedAfter)
+            UseCase->>Repo: FindChanges(updatedAfter)
+            Repo->>PostgreSQL: SELECT with timestamp filter
+            PostgreSQL-->>Repo: changed locations
+            Repo-->>UseCase: []LocationChange
+            UseCase-->>API: LocationChangesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getLocationChanges
       security:
         - HmacAuth: []
@@ -236,13 +303,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /master/v1/locations/validate:
     post:
       tags:
         - Master Data
       summary: Validate locations
-      description: Validate a list of location IDs before creating a campaign.
+      description: |-
+        Validate a list of location IDs before creating a campaign.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as LocationUseCase
+            participant Repo as LocationRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /master/v1/locations/validate
+            API->>UseCase: ValidateLocations(locationIds)
+            UseCase->>Repo: ValidateIds(locationIds)
+            Repo->>PostgreSQL: SELECT WHERE location_id IN (?)
+            PostgreSQL-->>Repo: existing locations
+            Repo-->>UseCase: validation results
+            UseCase-->>API: LocationValidationResponse
+            API-->>Client: 200 OK
+        ```
       operationId: validateLocations
       security:
         - HmacAuth: []
@@ -267,13 +351,30 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /organizations/v1/sync:
     post:
       tags:
         - Organization
       summary: Sync organization
-      description: Synchronize a new organization from Patricia to consumer systems.
+      description: |-
+        Synchronize a new organization from Patricia to consumer systems.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as OrganizationUseCase
+            participant Repo as OrganizationRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /organizations/v1/sync
+            API->>UseCase: SyncOrganization(orgData)
+            UseCase->>Repo: CreateOrUpdate(orgData)
+            Repo->>PostgreSQL: INSERT/UPDATE organization
+            PostgreSQL-->>Repo: success/failure
+            Repo-->>UseCase: operation result
+            UseCase-->>API: OrganizationSyncResponse
+            API-->>Client: 200 OK
+        ```
       operationId: syncOrganization
       security:
         - HmacAuth: []
@@ -298,13 +399,31 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /organizations/v1/{organization_id}:
     get:
       tags:
         - Organization
       summary: Get organization details
-      description: Retrieve details of a specific organization.
+      description: |-
+        Retrieve details of a specific organization.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as OrganizationUseCase
+            participant Repo as OrganizationRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /organizations/v1/{organization_id}
+            API->>UseCase: GetOrganizationById(orgId)
+            UseCase->>Repo: FindById(orgId)
+            Repo->>PostgreSQL: SELECT WHERE org_id = ?
+            PostgreSQL-->>Repo: organization or null
+            Repo-->>UseCase: Organization or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: OrganizationResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getOrganizationById
       security:
         - HmacAuth: []
@@ -323,13 +442,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrganizationDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /organizations/v1/product-industry:
     get:
       tags:
@@ -350,13 +468,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /devices/v1/sync:
     post:
       tags:
         - Device
       summary: Sync device
-      description: Synchronize a new device after pairing is completed.
+      description: |-
+        Synchronize a new device after pairing is completed.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as DeviceUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /devices/v1/sync
+            API->>UseCase: SyncDevice(deviceData)
+            UseCase->>Repo: CreateOrUpdate(deviceData)
+            Repo->>PostgreSQL: INSERT/UPDATE device
+            PostgreSQL-->>Repo: success/failure
+            Repo-->>UseCase: operation result
+            UseCase-->>API: DeviceSyncResponse
+            API-->>Client: 200 OK
+        ```
       operationId: syncDevice
       security:
         - HmacAuth: []
@@ -381,13 +516,30 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /devices/v1/availability:
     get:
       tags:
         - Device
       summary: Get device availability
-      description: Retrieve available devices for commercial inventory.
+      description: |-
+        Retrieve available devices for commercial inventory.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as DeviceUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /devices/v1/availability
+            API->>UseCase: GetDeviceAvailability()
+            UseCase->>Repo: GetAvailabilityStats()
+            Repo->>PostgreSQL: SELECT availability counts
+            PostgreSQL-->>Repo: availability stats
+            Repo-->>UseCase: AvailabilityStats
+            UseCase-->>API: DeviceAvailabilityResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getDeviceAvailability
       security:
         - HmacAuth: []
@@ -424,13 +576,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /devices/v1/health-check:
     post:
       tags:
         - Device
       summary: Bulk device health check
-      description: Check online/offline status of multiple devices in bulk.
+      description: |-
+        Check online/offline status of multiple devices in bulk.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as DeviceUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /devices/v1/health-check
+            API->>UseCase: CheckDeviceHealth(deviceIds)
+            UseCase->>Repo: GetHealthStatus(deviceIds)
+            Repo->>PostgreSQL: SELECT health status for devices
+            PostgreSQL-->>Repo: health status data
+            Repo-->>UseCase: []DeviceHealth
+            UseCase-->>API: DeviceHealthResponse
+            API-->>Client: 200 OK
+        ```
       operationId: bulkDeviceHealthCheck
       security:
         - HmacAuth: []
@@ -453,13 +622,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /devices/v1/capabilities:
     get:
       tags:
         - Device
       summary: Get device capabilities
-      description: Retrieve information about device capabilities.
+      description: |-
+        Retrieve information about device capabilities.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as DeviceUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /devices/v1/capabilities
+            API->>UseCase: GetDeviceCapabilities()
+            UseCase->>Repo: GetAllCapabilities()
+            Repo->>PostgreSQL: SELECT all capabilities
+            PostgreSQL-->>Repo: capabilities list
+            Repo-->>UseCase: []Capability
+            UseCase-->>API: CapabilitiesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getDeviceCapabilities
       security:
         - HmacAuth: []
@@ -480,13 +666,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /devices/v1/{device_id}:
     get:
       tags:
         - Device
       summary: Get device details
-      description: Retrieve details of a specific device.
+      description: |-
+        Retrieve details of a specific device.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as DeviceUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /devices/v1/{device_id}
+            API->>UseCase: GetDeviceById(deviceId)
+            UseCase->>Repo: FindById(deviceId)
+            Repo->>PostgreSQL: SELECT WHERE device_id = ?
+            PostgreSQL-->>Repo: device or null
+            Repo-->>UseCase: Device or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: DeviceResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getDeviceById
       security:
         - HmacAuth: []
@@ -504,24 +708,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeviceDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/commercial:
     post:
       tags:
         - Campaign
       summary: Create commercial campaign
-      description: |
+      description: |-
         Inject a commercial campaign from consumer system to Patricia.
 
         Campaign injection SUCCESS = Patricia accepted request + campaign persisted + MQTT distributed.
 
         Requires HMAC-MD5 signature validation via KrakenD gateway.
+
+        ```mermaid
+        sequenceDiagram
+            actor Gen21 as Gen21
+            participant API as API Handler
+            participant UseCase as CampaignUseCase
+            participant Repo as CampaignRepository
+            participant MQTT as MQTTService
+            participant PostgreSQL as Database
+            Gen21->>API: POST /campaigns/v1/commercial
+            API->>UseCase: CreateCampaign(campaignData)
+            UseCase->>Repo: Create(campaignData)
+            Repo->>PostgreSQL: INSERT campaign
+            PostgreSQL-->>Repo: campaign created
+            Repo-->>UseCase: Campaign
+            UseCase->>MQTT: PublishDistributionCommand(campaign)
+            MQTT-->>UseCase: publish result
+            UseCase-->>API: CampaignCreateResponse
+            API-->>Gen21: 200 OK (campaign accepted, no pricing)
+        ```
       operationId: createCommercialCampaign
       security:
         - HmacAuth: []
@@ -548,13 +771,35 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/commercial/{campaign_id}:
     put:
       tags:
         - Campaign
       summary: Update commercial campaign
-      description: Update an existing commercial campaign.
+      description: |-
+        Update an existing commercial campaign.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as CampaignUseCase
+            participant Repo as CampaignRepository
+            participant PostgreSQL as Database
+            Client->>API: PUT /campaigns/v1/commercial/{campaign_id}
+            API->>UseCase: UpdateCampaign(campaignId, updateData)
+            UseCase->>Repo: FindById(campaignId)
+            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
+            PostgreSQL-->>Repo: campaign or null
+            Repo-->>UseCase: Campaign or nil
+            UseCase->>UseCase: Check if found
+            UseCase->>Repo: Update(campaign)
+            Repo->>PostgreSQL: UPDATE campaign
+            PostgreSQL-->>Repo: update result
+            Repo-->>UseCase: updated campaign
+            UseCase-->>API: CampaignUpdateResponse
+            API-->>Client: 200 OK
+        ```
       operationId: updateCommercialCampaign
       security:
         - HmacAuth: []
@@ -588,13 +833,35 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/commercial/{campaign_id}/cancel:
     post:
       tags:
         - Campaign
       summary: Cancel commercial campaign
-      description: Cancel an existing commercial campaign. This is an irreversible action.
+      description: |-
+        Cancel an existing commercial campaign. This is an irreversible action.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as CampaignUseCase
+            participant Repo as CampaignRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /campaigns/v1/commercial/{campaign_id}/cancel
+            API->>UseCase: CancelCampaign(campaignId)
+            UseCase->>Repo: FindById(campaignId)
+            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
+            PostgreSQL-->>Repo: campaign or null
+            Repo-->>UseCase: Campaign or nil
+            UseCase->>UseCase: Check if found and cancellable
+            UseCase->>Repo: UpdateStatus(campaignId, CANCELLED)
+            Repo->>PostgreSQL: UPDATE campaign status
+            PostgreSQL-->>Repo: update result
+            Repo-->>UseCase: success
+            UseCase-->>API: CampaignCancelResponse
+            API-->>Client: 200 OK
+        ```
       operationId: cancelCommercialCampaign
       security:
         - HmacAuth: []
@@ -614,7 +881,7 @@ paths:
                 reason:
                   type: string
                   description: Reason for cancellation
-                  example: "Client requested cancellation"
+                  example: Client requested cancellation
       responses:
         "200":
           description: Campaign cancelled successfully
@@ -632,13 +899,31 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/commercial/{campaign_id}/status:
     get:
       tags:
         - Campaign
       summary: Get campaign status
-      description: Check the distribution status of a campaign.
+      description: |-
+        Check the distribution status of a campaign.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as CampaignUseCase
+            participant Repo as CampaignRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /campaigns/v1/commercial/{campaign_id}/status
+            API->>UseCase: GetCampaignStatus(campaignId)
+            UseCase->>Repo: FindById(campaignId)
+            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
+            PostgreSQL-->>Repo: campaign or null
+            Repo-->>UseCase: Campaign or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: CampaignStatusResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getCampaignStatus
       security:
         - HmacAuth: []
@@ -662,13 +947,30 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/commercial/status/bulk:
     post:
       tags:
         - Campaign
       summary: Bulk campaign status check
-      description: Check the status of multiple campaigns in bulk.
+      description: |-
+        Check the status of multiple campaigns in bulk.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as CampaignUseCase
+            participant Repo as CampaignRepository
+            participant PostgreSQL as Database
+            Client->>API: POST /campaigns/v1/commercial/status/bulk
+            API->>UseCase: GetBulkCampaignStatus(campaignIds)
+            UseCase->>Repo: FindByIds(campaignIds)
+            Repo->>PostgreSQL: SELECT WHERE campaign_id IN (?)
+            PostgreSQL-->>Repo: campaigns list
+            Repo-->>UseCase: []Campaign
+            UseCase-->>API: BulkCampaignStatusResponse
+            API-->>Client: 200 OK
+        ```
       operationId: bulkCampaignStatus
       security:
         - HmacAuth: []
@@ -702,7 +1004,6 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /campaigns/v1/replay:
     post:
       tags:
@@ -744,13 +1045,30 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /showtimes/v1/categories:
     get:
       tags:
         - Showtime
       summary: Get showtime categories
-      description: Retrieve all showtime categories.
+      description: |-
+        Retrieve all showtime categories.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as ShowtimeUseCase
+            participant Repo as ShowtimeRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /showtimes/v1/categories
+            API->>UseCase: GetShowtimeCategories()
+            UseCase->>Repo: GetAllCategories()
+            Repo->>PostgreSQL: SELECT all showtime categories
+            PostgreSQL-->>Repo: categories list
+            Repo-->>UseCase: []ShowtimeCategory
+            UseCase-->>API: ShowtimeCategoriesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getShowtimeCategories
       security:
         - HmacAuth: []
@@ -765,13 +1083,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /showtimes/v1/categories/{showtime_id}:
     get:
       tags:
         - Showtime
       summary: Get showtime category details
-      description: Retrieve details of a specific showtime category.
+      description: |-
+        Retrieve details of a specific showtime category.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as ShowtimeUseCase
+            participant Repo as ShowtimeRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /showtimes/v1/categories/{showtime_id}
+            API->>UseCase: GetShowtimeCategoryById(showtimeId)
+            UseCase->>Repo: FindCategoryById(showtimeId)
+            Repo->>PostgreSQL: SELECT WHERE showtime_id = ?
+            PostgreSQL-->>Repo: category or null
+            Repo-->>UseCase: ShowtimeCategory or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: ShowtimeCategoryResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getShowtimeCategoryById
       security:
         - HmacAuth: []
@@ -789,19 +1125,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ShowtimeCategoryDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /showtimes/v1/schedules:
     get:
       tags:
         - Showtime
       summary: Get showtime schedules
-      description: Retrieve all active showtime schedules.
+      description: |-
+        Retrieve all active showtime schedules.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as ShowtimeUseCase
+            participant Repo as ShowtimeRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /showtimes/v1/schedules
+            API->>UseCase: GetShowtimeSchedules()
+            UseCase->>Repo: GetAllSchedules()
+            Repo->>PostgreSQL: SELECT all showtime schedules
+            PostgreSQL-->>Repo: schedules list
+            Repo-->>UseCase: []ShowtimeSchedule
+            UseCase-->>API: ShowtimeSchedulesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getShowtimeSchedules
       security:
         - HmacAuth: []
@@ -816,13 +1169,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /showtimes/v1/schedules/active:
     get:
       tags:
         - Showtime
       summary: Get active showtime schedules
-      description: Retrieve showtime schedules that are currently active based on current time.
+      description: |-
+        Retrieve showtime schedules that are currently active based on current time.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as ShowtimeUseCase
+            participant Repo as ShowtimeRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /showtimes/v1/schedules/active
+            API->>UseCase: GetActiveShowtimeSchedules(time)
+            UseCase->>Repo: FindActiveSchedules(time)
+            Repo->>PostgreSQL: SELECT active schedules based on time
+            PostgreSQL-->>Repo: active schedules
+            Repo-->>UseCase: []ShowtimeSchedule
+            UseCase-->>API: ActiveShowtimeSchedulesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getActiveShowtimeSchedules
       security:
         - HmacAuth: []
@@ -837,13 +1207,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /showtimes/v1/slots:
     get:
       tags:
         - Showtime
       summary: Get slot configuration
-      description: "Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds."
+      description: |-
+        Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as ShowtimeUseCase
+            participant Repo as ShowtimeRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /showtimes/v1/slots
+            API->>UseCase: GetShowtimeSlotsConfiguration()
+            UseCase->>Repo: GetSlotConfiguration()
+            Repo->>PostgreSQL: SELECT slot configuration
+            PostgreSQL-->>Repo: slot config list
+            Repo-->>UseCase: []ShowtimeSlot
+            UseCase-->>API: ShowtimeSlotsConfigResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getSlotConfiguration
       security:
         - HmacAuth: []
@@ -858,13 +1245,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /rate-cards/v1:
     get:
       tags:
         - Rate Card
       summary: Get all rate cards
-      description: Retrieve all rate cards.
+      description: |-
+        Retrieve all rate cards.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as RateCardUseCase
+            participant Repo as RateCardRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /rate-cards/v1
+            API->>UseCase: GetAllRateCards(activeOnly)
+            UseCase->>Repo: FindAll(activeOnly)
+            Repo->>PostgreSQL: SELECT rate cards
+            PostgreSQL-->>Repo: rate cards list
+            Repo-->>UseCase: []RateCard
+            UseCase-->>API: RateCardsResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getRateCards
       security:
         - HmacAuth: []
@@ -885,13 +1289,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /rate-cards/v1/{rate_card_id}:
     get:
       tags:
         - Rate Card
       summary: Get rate card details
-      description: Retrieve details of a specific rate card.
+      description: |-
+        Retrieve details of a specific rate card.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as RateCardUseCase
+            participant Repo as RateCardRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /rate-cards/v1/{rate_card_id}
+            API->>UseCase: GetRateCardById(rateCardId)
+            UseCase->>Repo: FindById(rateCardId)
+            Repo->>PostgreSQL: SELECT WHERE rate_card_id = ?
+            PostgreSQL-->>Repo: rate card or null
+            Repo-->>UseCase: RateCard or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: RateCardResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getRateCardById
       security:
         - HmacAuth: []
@@ -909,19 +1331,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RateCardDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /rate-cards/v1/active:
     get:
       tags:
         - Rate Card
       summary: Get active rate cards
-      description: Retrieve all currently active rate cards.
+      description: |-
+        Retrieve all currently active rate cards.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as RateCardUseCase
+            participant Repo as RateCardRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /rate-cards/v1/active
+            API->>UseCase: GetActiveRateCards()
+            UseCase->>Repo: FindActive()
+            Repo->>PostgreSQL: SELECT active rate cards
+            PostgreSQL-->>Repo: active rate cards list
+            Repo-->>UseCase: []RateCard
+            UseCase-->>API: RateCardsResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getActiveRateCards
       security:
         - HmacAuth: []
@@ -936,13 +1375,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /rate-cards/v1/validate:
     post:
       tags:
         - Rate Card
       summary: Validate rate card
-      description: Validate a rate card for campaign pricing. Patricia provides base_price reference only.
+      description: |-
+        Validate a rate card for campaign pricing. Patricia provides base_price reference only.
+
+        ```mermaid
+        sequenceDiagram
+            actor Gen21 as Gen21
+            participant API as API Handler
+            participant UseCase as RateCardUseCase
+            participant Repo as RateCardRepository
+            participant PostgreSQL as Database
+            Gen21->>API: POST /rate-cards/v1/validate
+            API->>UseCase: ValidateRateCard(validationData)
+            UseCase->>Repo: FindMatchingRateCard(validationData)
+            Repo->>PostgreSQL: SELECT matching rate card
+            PostgreSQL-->>Repo: matching rate card or null
+            Repo-->>UseCase: RateCard or nil
+            UseCase->>UseCase: Perform validation logic
+            UseCase-->>API: RateCardValidationResponse
+            API-->>Gen21: 200 OK (base_price only, no multiplier)
+        ```
       operationId: validateRateCard
       security:
         - HmacAuth: []
@@ -967,13 +1424,30 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /rate-cards/v1/changes:
     get:
       tags:
         - Rate Card
       summary: Get incremental rate card changes
-      description: Retrieve incremental sync of rate card changes since a specific timestamp.
+      description: |-
+        Retrieve incremental sync of rate card changes since a specific timestamp.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as RateCardUseCase
+            participant Repo as RateCardRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /rate-cards/v1/changes?updated_after=
+            API->>UseCase: GetChangedRateCards(updatedAfter)
+            UseCase->>Repo: FindChanges(updatedAfter)
+            Repo->>PostgreSQL: SELECT changed rate cards
+            PostgreSQL-->>Repo: changed rate cards list
+            Repo-->>UseCase: []RateCardChange
+            UseCase-->>API: RateCardChangesResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getRateCardChanges
       security:
         - HmacAuth: []
@@ -999,13 +1473,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /inventories/v1/slots:
     get:
       tags:
         - Inventory Slot
       summary: Get inventory slots
-      description: Retrieve all inventory slots.
+      description: |-
+        Retrieve all inventory slots.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as InventoryUseCase
+            participant Repo as InventoryRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /inventories/v1/slots
+            API->>UseCase: GetInventorySlots(filters)
+            UseCase->>Repo: FindSlots(filters)
+            Repo->>PostgreSQL: SELECT inventory slots
+            PostgreSQL-->>Repo: slots list
+            Repo-->>UseCase: []InventorySlot
+            UseCase-->>API: InventorySlotsResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getInventorySlots
       security:
         - HmacAuth: []
@@ -1032,13 +1523,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /inventories/v1/slots/availability:
     get:
       tags:
         - Inventory Slot
       summary: Get slot availability
-      description: Retrieve slot availability based on time window.
+      description: |-
+        Retrieve slot availability based on time window.
+
+        ```mermaid
+        sequenceDiagram
+            actor Gen21 as Gen21
+            participant API as API Handler
+            participant UseCase as InventoryUseCase
+            participant Repo as InventoryRepository
+            participant PostgreSQL as Database
+            Gen21->>API: GET /inventories/v1/slots/availability
+            API->>UseCase: GetSlotAvailability(query)
+            UseCase->>Repo: GetAvailabilityStats(query)
+            Repo->>PostgreSQL: SELECT availability stats
+            PostgreSQL-->>Repo: availability stats
+            Repo-->>UseCase: AvailabilityStats (with base_price per showtime)
+            UseCase-->>API: SlotAvailabilityResponse
+            API-->>Gen21: 200 OK
+        ```
       operationId: getSlotAvailability
       security:
         - HmacAuth: []
@@ -1078,13 +1586,29 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /inventories/v1/slots/check:
     post:
       tags:
         - Inventory Slot
       summary: Check slot availability
-      description: Check slot availability before booking. Returns available slots with base_price per showtime.
+      description: |-
+        Check slot availability before booking. Returns available slots with base_price per showtime.
+
+        ```mermaid
+        sequenceDiagram
+            actor Gen21 as Gen21
+            participant API as API Handler
+            participant UseCase as InventoryUseCase
+            participant Repo as InventoryRepository
+            participant PostgreSQL as Database
+            Gen21->>API: POST /inventories/v1/slots/check
+            API->>UseCase: CheckSlotAvailability(checkData)
+            UseCase->>Repo: FindAvailableSlots(checkData)
+            Repo->>PostgreSQL: SELECT available slots
+            PostgreSQL-->>Repo: available slots
+            UseCase-->>API: SlotCheckResponse (with base_price per showtime)
+            API-->>Gen21: 200 OK
+        ```
       operationId: checkSlotAvailability
       security:
         - HmacAuth: []
@@ -1109,13 +1633,31 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /inventories/v1/slots/{slot_id}:
     get:
       tags:
         - Inventory Slot
       summary: Get inventory slot details
-      description: Retrieve details of a specific inventory slot.
+      description: |-
+        Retrieve details of a specific inventory slot.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as InventoryUseCase
+            participant Repo as InventoryRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /inventories/v1/slots/{slot_id}
+            API->>UseCase: GetSlotById(slotId)
+            UseCase->>Repo: FindById(slotId)
+            Repo->>PostgreSQL: SELECT WHERE slot_id = ?
+            PostgreSQL-->>Repo: slot or null
+            Repo-->>UseCase: InventorySlot or nil
+            UseCase->>UseCase: Check if found
+            UseCase-->>API: InventorySlotResponse or Error
+            API-->>Client: 200 OK or 404 Not Found
+        ```
       operationId: getInventorySlotById
       security:
         - HmacAuth: []
@@ -1133,19 +1675,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventorySlotDetailResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /health/v1/integration:
     get:
       tags:
         - Health
       summary: Integration health check
-      description: Check the health status of Patricia integration services.
+      description: |-
+        Check the health status of Patricia integration services.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as HealthUseCase
+            participant Repo as HealthRepository
+            participant DB as Database
+            participant MQTT as MQTTService
+            participant Storage as StorageService
+            Client->>API: GET /health/v1/integration
+            API->>UseCase: GetIntegrationHealth()
+            UseCase->>DB: CheckConnection()
+            DB-->>UseCase: connection status
+            UseCase->>MQTT: CheckConnectivity()
+            MQTT-->>UseCase: mqtt status
+            UseCase->>Storage: CheckAccessibility()
+            Storage-->>UseCase: storage status
+            UseCase-->>API: IntegrationHealthResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getIntegrationHealth
       security:
         - HmacAuth: []
@@ -1158,13 +1721,27 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /health/v1/mqtt:
     get:
       tags:
         - Health
       summary: MQTT broker health check
-      description: Check MQTT broker connectivity status.
+      description: |-
+        Check MQTT broker connectivity status.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as HealthUseCase
+            participant MQTT as MQTTService
+            Client->>API: GET /health/v1/mqtt
+            API->>UseCase: GetMQTTHealth()
+            UseCase->>MQTT: CheckConnectivity()
+            MQTT-->>UseCase: mqtt status
+            UseCase-->>API: MQTTHealthResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getMqttHealth
       security:
         - HmacAuth: []
@@ -1177,13 +1754,30 @@ paths:
                 $ref: "#/components/schemas/MqttHealthResponse"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /health/v1/devices:
     get:
       tags:
         - Health
       summary: Device health summary
-      description: Get summary of device health status.
+      description: |-
+        Get summary of device health status.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as HealthUseCase
+            participant Repo as DeviceRepository
+            participant PostgreSQL as Database
+            Client->>API: GET /health/v1/devices
+            API->>UseCase: GetDeviceHealthSummary()
+            UseCase->>Repo: GetHealthStats()
+            Repo->>PostgreSQL: SELECT device health stats
+            PostgreSQL-->>Repo: health stats
+            Repo-->>UseCase: DeviceHealthStats
+            UseCase-->>API: DeviceHealthResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getDeviceHealthSummary
       security:
         - HmacAuth: []
@@ -1196,13 +1790,27 @@ paths:
                 $ref: "#/components/schemas/DeviceHealthSummaryResponse"
         "500":
           $ref: "#/components/responses/InternalError"
-
   /health/v1/storage:
     get:
       tags:
         - Health
       summary: Storage health check
-      description: Check AWS S3 storage accessibility.
+      description: |-
+        Check AWS S3 storage accessibility.
+
+        ```mermaid
+        sequenceDiagram
+            actor Client as Client
+            participant API as API Handler
+            participant UseCase as HealthUseCase
+            participant Storage as StorageService
+            Client->>API: GET /health/v1/storage
+            API->>UseCase: GetStorageHealth()
+            UseCase->>Storage: CheckAccessibility()
+            Storage-->>UseCase: storage status
+            UseCase-->>API: StorageHealthResponse
+            API-->>Client: 200 OK
+        ```
       operationId: getStorageHealth
       security:
         - HmacAuth: []
@@ -1215,7 +1823,6 @@ paths:
                 $ref: "#/components/schemas/StorageHealthResponse"
         "500":
           $ref: "#/components/responses/InternalError"
-
 components:
   securitySchemes:
     HmacAuth:
@@ -1264,7 +1871,6 @@ components:
         ```bash
         curl "https://api.patricia.io/master/v1/locations/hierarchy?channel_id=G21&api_key=${API_KEY}&x_timestamp=${TIMESTAMP}&x_signature=${SIGNATURE}"
         ```
-
   schemas:
     GatewayErrorResponse:
       description: Error response from KrakenD gateway (HMAC authentication layer)
@@ -1275,7 +1881,6 @@ components:
           description: Gateway error message
       example:
         error: invalid signature
-
     ServiceErrorResponse:
       description: Error response from Patricia service (business logic layer)
       type: object
@@ -1293,7 +1898,6 @@ components:
         status:
           code: MST40101
           message: Unauthorized
-
     ErrorResponse:
       description: Generic error response (deprecated, use GatewayErrorResponse or ServiceErrorResponse)
       type: object
@@ -1303,7 +1907,6 @@ components:
           description: Error message
       example:
         error: invalid signature
-
     Location:
       type: object
       properties:
@@ -1335,7 +1938,6 @@ components:
           items:
             $ref: "#/components/schemas/Location"
           description: Child locations (for hierarchy)
-
     LocationHierarchyResponse:
       type: object
       properties:
@@ -1352,7 +1954,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Location"
-
     LocationListResponse:
       type: object
       properties:
@@ -1378,7 +1979,6 @@ components:
               type: integer
             total:
               type: integer
-
     LocationDetailResponse:
       type: object
       properties:
@@ -1393,7 +1993,6 @@ components:
               example: Location details successfully retrieved
         data:
           $ref: "#/components/schemas/Location"
-
     LocationChangesResponse:
       type: object
       properties:
@@ -1425,7 +2024,6 @@ components:
                 format: date-time
               data:
                 $ref: "#/components/schemas/Location"
-
     LocationValidationRequest:
       type: object
       required:
@@ -1437,7 +2035,6 @@ components:
             type: string
             format: uuid
           description: List of location IDs to validate
-
     LocationValidationResponse:
       type: object
       properties:
@@ -1461,7 +2058,6 @@ components:
               type: array
               items:
                 type: string
-
     OrganizationSyncRequest:
       type: object
       required:
@@ -1484,7 +2080,6 @@ components:
         industry_id:
           type: string
           description: Product industry classification ID
-
     OrganizationSyncResponse:
       type: object
       properties:
@@ -1504,7 +2099,6 @@ components:
               type: string
               description: Client ID assigned by consumer system
               example: GEN21-CLI-001
-
     OrganizationDetailResponse:
       type: object
       properties:
@@ -1535,7 +2129,6 @@ components:
             updated_at:
               type: string
               format: date-time
-
     ProductIndustryResponse:
       type: object
       properties:
@@ -1584,7 +2177,6 @@ components:
                                   type: string
                                 product_name:
                                   type: string
-
     DeviceCapabilities:
       type: object
       properties:
@@ -1609,7 +2201,6 @@ components:
         interactive_supported:
           type: boolean
           description: Whether device supports interactive content
-
     DeviceSyncRequest:
       type: object
       required:
@@ -1648,7 +2239,6 @@ components:
           example: 106.123
         capabilities:
           $ref: "#/components/schemas/DeviceCapabilities"
-
     DeviceSyncResponse:
       type: object
       properties:
@@ -1671,7 +2261,6 @@ components:
                 - PENDING
                 - INACTIVE
               example: ACTIVE
-
     DeviceAvailabilityResponse:
       type: object
       properties:
@@ -1693,7 +2282,6 @@ components:
               type: integer
             unavailable_devices:
               type: integer
-
     DeviceHealthCheckRequest:
       type: object
       properties:
@@ -1702,7 +2290,6 @@ components:
           items:
             type: string
           description: List of device IDs to check
-
     DeviceHealthCheckResponse:
       type: object
       properties:
@@ -1730,7 +2317,6 @@ components:
               last_seen:
                 type: string
                 format: date-time
-
     DeviceCapabilitiesResponse:
       type: object
       properties:
@@ -1754,7 +2340,6 @@ components:
                 type: string
               description:
                 type: string
-
     DeviceDetailResponse:
       type: object
       properties:
@@ -1797,7 +2382,6 @@ components:
             updated_at:
               type: string
               format: date-time
-
     CampaignSchedule:
       type: object
       required:
@@ -1818,7 +2402,6 @@ components:
           type: string
           description: IANA timezone for scheduling
           example: Asia/Jakarta
-
     CampaignTarget:
       type: object
       properties:
@@ -1835,7 +2418,6 @@ components:
           description: Location IDs to target (optional if device_ids provided)
           example:
             - CITY-001
-
     CampaignMedia:
       type: object
       required:
@@ -1871,7 +2453,6 @@ components:
           type: integer
           description: File size in bytes
           example: 10485760
-
     CreateCampaignRequest:
       type: object
       required:
@@ -1914,7 +2495,6 @@ components:
           maximum: 100
           description: Percentage of timeshow allocation
           example: 80
-
     CreateCampaignResponse:
       type: object
       properties:
@@ -1950,7 +2530,6 @@ components:
               type: string
               format: date-time
               example: "2026-05-12T10:00:00Z"
-
     UpdateCampaignRequest:
       type: object
       properties:
@@ -1966,7 +2545,6 @@ components:
           type: integer
           minimum: 0
           maximum: 100
-
     UpdateCampaignResponse:
       type: object
       properties:
@@ -1989,7 +2567,6 @@ components:
             updated_at:
               type: string
               format: date-time
-
     CancelCampaignResponse:
       type: object
       properties:
@@ -2013,7 +2590,6 @@ components:
             cancelled_at:
               type: string
               format: date-time
-
     CampaignStatusResponse:
       type: object
       properties:
@@ -2065,7 +2641,6 @@ components:
                 distributed_at:
                   type: string
                   format: date-time
-
     BulkCampaignStatusResponse:
       type: object
       properties:
@@ -2090,7 +2665,6 @@ components:
               updated_at:
                 type: string
                 format: date-time
-
     ShowtimeCategory:
       type: object
       properties:
@@ -2113,7 +2687,6 @@ components:
         active:
           type: boolean
           example: true
-
     ShowtimeCategoriesResponse:
       type: object
       properties:
@@ -2130,7 +2703,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ShowtimeCategory"
-
     ShowtimeCategoryDetailResponse:
       type: object
       properties:
@@ -2145,7 +2717,6 @@ components:
               example: Showtime category details successfully retrieved
         data:
           $ref: "#/components/schemas/ShowtimeCategory"
-
     ShowtimeSchedule:
       type: object
       properties:
@@ -2186,7 +2757,6 @@ components:
           type: integer
           description: Duration of each slot in seconds
           example: 30
-
     ShowtimeSchedulesResponse:
       type: object
       properties:
@@ -2203,7 +2773,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ShowtimeSchedule"
-
     SlotConfigResponse:
       type: object
       properties:
@@ -2231,7 +2800,6 @@ components:
                 example: 30
               description:
                 type: string
-
     RateCard:
       type: object
       properties:
@@ -2266,7 +2834,6 @@ components:
         active:
           type: boolean
           example: true
-
     RateCardListResponse:
       type: object
       properties:
@@ -2283,7 +2850,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RateCard"
-
     RateCardDetailResponse:
       type: object
       properties:
@@ -2298,7 +2864,6 @@ components:
               example: Rate card details successfully retrieved
         data:
           $ref: "#/components/schemas/RateCard"
-
     RateCardValidationRequest:
       type: object
       required:
@@ -2314,7 +2879,6 @@ components:
         slot_duration_seconds:
           type: integer
           example: 30
-
     RateCardValidationResponse:
       type: object
       properties:
@@ -2343,7 +2907,6 @@ components:
                   format: double
                 currency:
                   type: string
-
     RateCardChangesResponse:
       type: object
       properties:
@@ -2372,7 +2935,6 @@ components:
               updated_at:
                 type: string
                 format: date-time
-
     InventorySlot:
       type: object
       properties:
@@ -2409,7 +2971,6 @@ components:
               format: double
             currency:
               type: string
-
     InventorySlotsResponse:
       type: object
       properties:
@@ -2426,7 +2987,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InventorySlot"
-
     SlotAvailabilityResponse:
       type: object
       properties:
@@ -2490,7 +3050,6 @@ components:
                         format: double
                       currency:
                         type: string
-
     CheckSlotAvailabilityRequest:
       type: object
       required:
@@ -2517,7 +3076,6 @@ components:
           type: string
           format: date
           example: "2026-05-20"
-
     CheckSlotAvailabilityResponse:
       type: object
       properties:
@@ -2582,7 +3140,6 @@ components:
                         format: double
                       currency:
                         type: string
-
     InventorySlotDetailResponse:
       type: object
       properties:
@@ -2630,7 +3187,6 @@ components:
             updated_at:
               type: string
               format: date-time
-
     HealthResponse:
       type: object
       properties:
@@ -2682,7 +3238,6 @@ components:
             uptime_percentage:
               type: number
               format: double
-
     MqttHealthResponse:
       type: object
       properties:
@@ -2710,7 +3265,6 @@ components:
             last_connected:
               type: string
               format: date-time
-
     DeviceHealthSummaryResponse:
       type: object
       properties:
@@ -2754,7 +3308,6 @@ components:
                     type: integer
                   unhealthy:
                     type: integer
-
     StorageHealthResponse:
       type: object
       properties:
@@ -2786,7 +3339,6 @@ components:
               format: date-time
             response_time_ms:
               type: integer
-
   responses:
     BadRequest:
       description: |
@@ -2810,7 +3362,6 @@ components:
                 status:
                   code: MST40002
                   message: Invalid request payload
-
     Unauthorized:
       description: |
         Authentication failed. Can originate from:
@@ -2841,7 +3392,6 @@ components:
                 status:
                   code: MST40101
                   message: Unauthorized
-
     Forbidden:
       description: |
         Endpoint not authorized. Originates from KrakenD Gateway when the channel's `allowed_endpoints` does not include the requested path.
@@ -2851,7 +3401,6 @@ components:
             $ref: "#/components/schemas/GatewayErrorResponse"
           example:
             error: endpoint not authorized
-
     NotFound:
       description: |
         Resource not found. Originates from the Patricia service.
@@ -2902,7 +3451,6 @@ components:
                 status:
                   code: INV40401
                   message: Inventory slot not found
-
     Conflict:
       description: |
         Duplicate conflict. Originates from the Patricia service.
@@ -2935,7 +3483,6 @@ components:
                 status:
                   code: CMP40902
                   message: Campaign already completed or cancelled
-
     ValidationError:
       description: |
         Business validation failed. Originates from the Patricia service.
@@ -2956,7 +3503,6 @@ components:
                 status:
                   code: CMP42201
                   message: Business validation failed
-
     InternalError:
       description: |
         Internal server error. Can originate from:

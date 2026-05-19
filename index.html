@@ -11,6 +11,8 @@
     body { margin: 0; background: #fafafa; }
     .topbar-wrapper .link::after { content: "v1.0.0"; margin-left: 8px; font-size: 12px; color: #fff; opacity: 0.7; }
     #cors-warning { display: none; background: #fff3cd; border: 1px solid #ffc107; padding: 20px; margin: 40px auto; max-width: 600px; border-radius: 8px; font-family: monospace; }
+    .mermaid { display: flex; justify-content: center; padding: 16px 0; }
+    .mermaid svg { max-width: 100%; height: auto; }
   </style>
 </head>
 <body>
@@ -26,7 +28,51 @@ python3 -m http.server 8080</pre>
 
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
   <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      sequence: {
+        diagramMarginX: 50,
+        diagramMarginY: 10,
+        actorMargin: 50,
+        width: 150,
+        height: 65,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 35,
+        mirrorActors: true,
+        bottomMarginAdj: 1,
+        useMaxWidth: true,
+      }
+    });
+
+    function renderMermaidDiagrams() {
+      const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
+      if (codeBlocks.length === 0) return;
+
+      const promises = Array.from(codeBlocks).map(async (block, index) => {
+        const id = 'mermaid-' + index;
+        block.id = id;
+        const graphDefinition = block.textContent;
+        const container = document.createElement('div');
+        container.className = 'mermaid';
+        block.parentNode.replaceWith(container);
+
+        try {
+          const { svg } = await mermaid.render(id, graphDefinition);
+          container.innerHTML = svg;
+        } catch (e) {
+          container.innerHTML = '<pre>' + graphDefinition + '</pre>';
+        }
+      });
+
+      return Promise.all(promises);
+    }
+
     window.onload = function() {
       const isFileProtocol = window.location.protocol === 'file:';
       if (isFileProtocol) {
@@ -56,10 +102,12 @@ python3 -m http.server 8080</pre>
         tryItOutEnabled: false,
         supportedSubmitMethods: ["get", "post", "put", "delete", "patch"],
         persistAuthorization: true,
-        onComplete: function() {
+        onComplete: async function() {
           if (isFileProtocol) {
             document.getElementById('swagger-ui').innerHTML = '';
+            return;
           }
+          await renderMermaidDiagrams();
         },
         onFailure: function(data) {
           if (isFileProtocol) {
@@ -69,6 +117,12 @@ python3 -m http.server 8080</pre>
       });
 
       window.ui = ui;
+
+      // Re-render Mermaid diagrams when user expands/collapses endpoints
+      const observer = new MutationObserver(() => {
+        renderMermaidDiagrams();
+      });
+      observer.observe(document.getElementById('swagger-ui'), { childList: true, subtree: true });
     };
   </script>
 </body>
