@@ -1266,7 +1266,36 @@ components:
         ```
 
   schemas:
+    GatewayErrorResponse:
+      description: Error response from KrakenD gateway (HMAC authentication layer)
+      type: object
+      properties:
+        error:
+          type: string
+          description: Gateway error message
+      example:
+        error: invalid signature
+
+    ServiceErrorResponse:
+      description: Error response from Patricia service (business logic layer)
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Service-specific error code
+            message:
+              type: string
+              description: Human-readable error description
+      example:
+        status:
+          code: MST40101
+          message: Unauthorized
+
     ErrorResponse:
+      description: Generic error response (deprecated, use GatewayErrorResponse or ServiceErrorResponse)
       type: object
       properties:
         error:
@@ -2760,72 +2789,201 @@ components:
 
   responses:
     BadRequest:
-      description: Invalid request payload
+      description: |
+        Invalid request payload. Can originate from:
+        - **KrakenD Gateway**: Missing HMAC auth params
+        - **Service**: Invalid JSON body or missing required fields
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: Invalid request payload
+            oneOf:
+              - $ref: "#/components/schemas/GatewayErrorResponse"
+              - $ref: "#/components/schemas/ServiceErrorResponse"
+          examples:
+            gateway:
+              summary: KrakenD Gateway Error
+              value:
+                error: missing channel_id
+            service:
+              summary: Service Error
+              value:
+                status:
+                  code: MST40002
+                  message: Invalid request payload
 
     Unauthorized:
-      description: Authentication failed
+      description: |
+        Authentication failed. Can originate from:
+        - **KrakenD Gateway**: Invalid HMAC signature, expired timestamp, or unknown credentials
+        - **Service**: Invalid or expired session (if applicable)
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            oneOf:
+              - $ref: "#/components/schemas/GatewayErrorResponse"
+              - $ref: "#/components/schemas/ServiceErrorResponse"
           examples:
-            invalidCredentials:
+            gatewayInvalidCredentials:
+              summary: KrakenD - Invalid Credentials
               value:
                 error: invalid credentials
-            requestExpired:
+            gatewayRequestExpired:
+              summary: KrakenD - Request Expired
               value:
                 error: request expired
-            invalidSignature:
+            gatewayInvalidSignature:
+              summary: KrakenD - Invalid Signature
               value:
                 error: invalid signature
+            service:
+              summary: Service Error
+              value:
+                status:
+                  code: MST40101
+                  message: Unauthorized
 
     Forbidden:
-      description: Endpoint not authorized
+      description: |
+        Endpoint not authorized. Originates from KrakenD Gateway when the channel's `allowed_endpoints` does not include the requested path.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/GatewayErrorResponse"
           example:
             error: endpoint not authorized
 
     NotFound:
-      description: Resource not found
+      description: |
+        Resource not found. Originates from the Patricia service.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: Resource not found
+            $ref: "#/components/schemas/ServiceErrorResponse"
+          examples:
+            locationNotFound:
+              summary: Location Not Found
+              value:
+                status:
+                  code: MST40401
+                  message: Location not found
+            organizationNotFound:
+              summary: Organization Not Found
+              value:
+                status:
+                  code: ORG40401
+                  message: Organization not found
+            deviceNotFound:
+              summary: Device Not Found
+              value:
+                status:
+                  code: DEV40401
+                  message: Device not found
+            campaignNotFound:
+              summary: Campaign Not Found
+              value:
+                status:
+                  code: CMP40402
+                  message: Campaign not found
+            showtimeNotFound:
+              summary: Showtime Not Found
+              value:
+                status:
+                  code: SHW40401
+                  message: Showtime category not found
+            rateCardNotFound:
+              summary: Rate Card Not Found
+              value:
+                status:
+                  code: RTC40401
+                  message: Rate card not found
+            slotNotFound:
+              summary: Inventory Slot Not Found
+              value:
+                status:
+                  code: INV40401
+                  message: Inventory slot not found
 
     Conflict:
-      description: Duplicate conflict
+      description: |
+        Duplicate conflict. Originates from the Patricia service.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: Resource already exists
+            $ref: "#/components/schemas/ServiceErrorResponse"
+          examples:
+            duplicateOrganization:
+              summary: Duplicate Organization
+              value:
+                status:
+                  code: ORG40901
+                  message: Duplicate organization
+            duplicateDevice:
+              summary: Duplicate Device
+              value:
+                status:
+                  code: DEV40901
+                  message: Duplicate device
+            duplicateCampaign:
+              summary: Duplicate Campaign
+              value:
+                status:
+                  code: CMP40901
+                  message: Duplicate campaign
+            campaignAlreadyCompleted:
+              summary: Campaign Already Completed or Cancelled
+              value:
+                status:
+                  code: CMP40902
+                  message: Campaign already completed or cancelled
 
     ValidationError:
-      description: Business validation failed
+      description: |
+        Business validation failed. Originates from the Patricia service.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: Business validation failed
+            $ref: "#/components/schemas/ServiceErrorResponse"
+          examples:
+            masterData:
+              summary: Master Data Validation Failed
+              value:
+                status:
+                  code: MST42201
+                  message: Validation failed
+            campaign:
+              summary: Campaign Validation Failed
+              value:
+                status:
+                  code: CMP42201
+                  message: Business validation failed
 
     InternalError:
-      description: Internal server error
+      description: |
+        Internal server error. Can originate from:
+        - **KrakenD Gateway**: Upstream service unreachable
+        - **Service**: Database failure, internal processing error
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-          example:
-            error: Internal server error
+            oneOf:
+              - $ref: "#/components/schemas/GatewayErrorResponse"
+              - $ref: "#/components/schemas/ServiceErrorResponse"
+          examples:
+            service:
+              summary: Service Error
+              value:
+                status:
+                  code: MST50001
+                  message: Database query failed
+            mqttUnreachable:
+              summary: MQTT Broker Unreachable
+              value:
+                status:
+                  code: HLT50002
+                  message: MQTT broker unreachable
+            storageInaccessible:
+              summary: Storage Inaccessible
+              value:
+                status:
+                  code: HLT50003
+                  message: Storage inaccessible
