@@ -4,14 +4,20 @@ info:
   description: |
     Patricia Digital Out-of-Home (DOOH) Commercial Inventory Platform API.
 
+    ## Updated Scope (2026-05-21)
+    - Focus only on Sales Contract and Agency
+    - Patricia provides sync endpoints only (no detail endpoints)
+    - Gen21 stores synced data locally
+
     Patricia serves as the operational/device platform and source of truth for:
-    - Location master data
-    - Device inventory and capabilities
+    - Location master data (sync only)
+    - Device inventory (sync only)
     - Campaign distribution and execution
     - Showtime scheduling
-    - Rate card references
-    - Slot inventory management
+    - Rate card references (sync only)
+    - Slot inventory management (sync only)
     - Health monitoring
+    - Agency management
 
     ## Authentication
 
@@ -91,299 +97,69 @@ servers:
     description: Staging
 tags:
   - name: Master Data
-    description: Location hierarchy and master data (Patricia = Source of Truth)
+    description: Location master data sync (Patricia = Source of Truth)
   - name: Organization
-    description: Organization synchronization and product industry
+    description: Organization sync
   - name: Device
-    description: Device inventory, capabilities, and health
+    description: Device inventory sync
   - name: Campaign
     description: Commercial campaign injection and management
   - name: Showtime
     description: Showtime categories, schedules, and slots
   - name: Rate Card
-    description: Rate card pricing reference
+    description: Rate card sync
   - name: Inventory Slot
-    description: Slot availability and booking
+    description: Inventory slot sync
   - name: Health
     description: System health and operational monitoring
+  - name: Agency
+    description: Agency management
+  - name: Playlist
+    description: Playlist management for channel scheduling
 paths:
-  /master/v1/locations/hierarchy:
-    get:
-      tags:
-        - Master Data
-      summary: Get full location hierarchy
-      description: |-
-        Retrieve the complete location hierarchy from Province to City level.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as LocationUseCase
-            participant Repo as LocationRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /master/v1/locations/hierarchy
-            API->>UseCase: GetLocationHierarchy()
-            UseCase->>Repo: GetFullHierarchy()
-            Repo->>PostgreSQL: SELECT hierarchical location data
-            PostgreSQL-->>Repo: location hierarchy
-            Repo-->>UseCase: LocationHierarchy
-            UseCase-->>API: LocationHierarchyResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getLocationHierarchy
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationHierarchyResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /master/v1/locations:
-    get:
-      tags:
-        - Master Data
-      summary: Get flat list of locations
-      description: |-
-        Retrieve a flat list of all locations.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as LocationUseCase
-            participant Repo as LocationRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /master/v1/locations
-            API->>UseCase: GetLocationsList()
-            UseCase->>Repo: GetFlatLocations()
-            Repo->>PostgreSQL: SELECT flat location data
-            PostgreSQL-->>Repo: locations list
-            Repo-->>UseCase: []Location
-            UseCase-->>API: LocationsListResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getLocations
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: type
-          in: query
-          description: Filter by location type (PROVINCE, CITY)
-          schema:
-            type: string
-            enum:
-              - PROVINCE
-              - CITY
-        - name: page
-          in: query
-          description: Page number
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          description: Items per page
-          schema:
-            type: integer
-            default: 50
-            maximum: 100
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /master/v1/locations/{location_id}:
-    get:
-      tags:
-        - Master Data
-      summary: Get location details
-      description: |-
-        Retrieve details of a specific location.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as LocationUseCase
-            participant Repo as LocationRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /master/v1/locations/{location_id}
-            API->>UseCase: GetLocationById(locationId)
-            UseCase->>Repo: FindById(locationId)
-            Repo->>PostgreSQL: SELECT WHERE location_id = ?
-            PostgreSQL-->>Repo: location or null
-            Repo-->>UseCase: Location or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: LocationResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getLocationById
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: location_id
-          in: path
-          required: true
-          description: UUID of the location
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationDetailResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /master/v1/locations/changes:
-    get:
-      tags:
-        - Master Data
-      summary: Get incremental location changes
-      description: |-
-        Retrieve incremental sync of location changes since a specific timestamp.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as LocationUseCase
-            participant Repo as LocationRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /master/v1/locations/changes?updated_after=
-            API->>UseCase: GetChangedLocations(updatedAfter)
-            UseCase->>Repo: FindChanges(updatedAfter)
-            Repo->>PostgreSQL: SELECT with timestamp filter
-            PostgreSQL-->>Repo: changed locations
-            Repo-->>UseCase: []LocationChange
-            UseCase-->>API: LocationChangesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getLocationChanges
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: updated_after
-          in: query
-          required: true
-          description: ISO8601 timestamp to get changes after
-          schema:
-            type: string
-            format: date-time
-            example: "2026-05-12T10:00:00Z"
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationChangesResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /master/v1/locations/validate:
+  /master/v1/locations/sync:
     post:
       tags:
         - Master Data
-      summary: Validate locations
-      description: |-
-        Validate a list of location IDs before creating a campaign.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as LocationUseCase
-            participant Repo as LocationRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /master/v1/locations/validate
-            API->>UseCase: ValidateLocations(locationIds)
-            UseCase->>Repo: ValidateIds(locationIds)
-            Repo->>PostgreSQL: SELECT WHERE location_id IN (?)
-            PostgreSQL-->>Repo: existing locations
-            Repo-->>UseCase: validation results
-            UseCase-->>API: LocationValidationResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: validateLocations
+      summary: Sync locations
+      description: Sync all locations from Patricia to Gen21. Returns a complete list of locations with full details.
+      operationId: syncLocations
       security:
         - HmacAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LocationValidationRequest"
+              $ref: "#/components/schemas/SyncRequest"
       responses:
         "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LocationValidationResponse"
+                $ref: "#/components/schemas/LocationSyncResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "422":
-          $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
   /organizations/v1/sync:
     post:
       tags:
         - Organization
-      summary: Sync organization
-      description: |-
-        Synchronize a new organization from Patricia to consumer systems.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as OrganizationUseCase
-            participant Repo as OrganizationRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /organizations/v1/sync
-            API->>UseCase: SyncOrganization(orgData)
-            UseCase->>Repo: CreateOrUpdate(orgData)
-            Repo->>PostgreSQL: INSERT/UPDATE organization
-            PostgreSQL-->>Repo: success/failure
-            Repo-->>UseCase: operation result
-            UseCase-->>API: OrganizationSyncResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: syncOrganization
+      summary: Sync organizations
+      description: Sync all organizations from Patricia to Gen21. Returns a complete list of organizations with full details.
+      operationId: syncOrganizations
       security:
         - HmacAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OrganizationSyncRequest"
+              $ref: "#/components/schemas/SyncRequest"
       responses:
         "200":
           description: Successful response
@@ -395,112 +171,23 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /organizations/v1/{organization_id}:
-    get:
-      tags:
-        - Organization
-      summary: Get organization details
-      description: |-
-        Retrieve details of a specific organization.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as OrganizationUseCase
-            participant Repo as OrganizationRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /organizations/v1/{organization_id}
-            API->>UseCase: GetOrganizationById(orgId)
-            UseCase->>Repo: FindById(orgId)
-            Repo->>PostgreSQL: SELECT WHERE org_id = ?
-            PostgreSQL-->>Repo: organization or null
-            Repo-->>UseCase: Organization or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: OrganizationResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getOrganizationById
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: organization_id
-          in: path
-          required: true
-          description: UUID of the organization
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OrganizationDetailResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /organizations/v1/product-industry:
-    get:
-      tags:
-        - Organization
-      summary: Get product industry master
-      description: Retrieve the 4-level product industry hierarchy (Industry -> Category -> Sub-Category -> Product).
-      operationId: getProductIndustry
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProductIndustryResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
   /devices/v1/sync:
     post:
       tags:
         - Device
-      summary: Sync device
-      description: |-
-        Synchronize a new device after pairing is completed.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as DeviceUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /devices/v1/sync
-            API->>UseCase: SyncDevice(deviceData)
-            UseCase->>Repo: CreateOrUpdate(deviceData)
-            Repo->>PostgreSQL: INSERT/UPDATE device
-            PostgreSQL-->>Repo: success/failure
-            Repo-->>UseCase: operation result
-            UseCase-->>API: DeviceSyncResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: syncDevice
+      summary: Sync devices
+      description: Sync all devices from Patricia to Gen21. Returns a complete list of devices with full details including capabilities.
+      operationId: syncDevices
       security:
         - HmacAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DeviceSyncRequest"
+              $ref: "#/components/schemas/SyncRequest"
       responses:
         "200":
           description: Successful response
@@ -512,206 +199,122 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
-  /devices/v1/availability:
-    get:
-      tags:
-        - Device
-      summary: Get device availability
-      description: |-
-        Retrieve available devices for commercial inventory.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as DeviceUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /devices/v1/availability
-            API->>UseCase: GetDeviceAvailability()
-            UseCase->>Repo: GetAvailabilityStats()
-            Repo->>PostgreSQL: SELECT availability counts
-            PostgreSQL-->>Repo: availability stats
-            Repo-->>UseCase: AvailabilityStats
-            UseCase-->>API: DeviceAvailabilityResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getDeviceAvailability
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: location_id
-          in: query
-          description: Filter by location ID
-          schema:
-            type: string
-            format: uuid
-        - name: organization_id
-          in: query
-          description: Filter by organization ID
-          schema:
-            type: string
-            format: uuid
-        - name: status
-          in: query
-          description: Filter by device status
-          schema:
-            type: string
-            enum:
-              - ONLINE
-              - OFFLINE
-              - ALL
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeviceAvailabilityResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /devices/v1/health-check:
+  /rate-cards/v1/sync:
     post:
       tags:
-        - Device
-      summary: Bulk device health check
-      description: |-
-        Check online/offline status of multiple devices in bulk.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as DeviceUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /devices/v1/health-check
-            API->>UseCase: CheckDeviceHealth(deviceIds)
-            UseCase->>Repo: GetHealthStatus(deviceIds)
-            Repo->>PostgreSQL: SELECT health status for devices
-            PostgreSQL-->>Repo: health status data
-            Repo-->>UseCase: []DeviceHealth
-            UseCase-->>API: DeviceHealthResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: bulkDeviceHealthCheck
+        - Rate Card
+      summary: Sync rate cards
+      description: Sync all rate cards from Patricia to Gen21. Returns a complete list of rate cards with full details.
+      operationId: syncRateCards
       security:
         - HmacAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DeviceHealthCheckRequest"
+              $ref: "#/components/schemas/SyncRequest"
       responses:
         "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DeviceHealthCheckResponse"
+                $ref: "#/components/schemas/RateCardSyncResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-  /devices/v1/capabilities:
-    get:
+  /inventories/v1/slots/sync:
+    post:
       tags:
-        - Device
-      summary: Get device capabilities
-      description: |-
-        Retrieve information about device capabilities.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as DeviceUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /devices/v1/capabilities
-            API->>UseCase: GetDeviceCapabilities()
-            UseCase->>Repo: GetAllCapabilities()
-            Repo->>PostgreSQL: SELECT all capabilities
-            PostgreSQL-->>Repo: capabilities list
-            Repo-->>UseCase: []Capability
-            UseCase-->>API: CapabilitiesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getDeviceCapabilities
+        - Inventory Slot
+      summary: Sync inventory slots
+      description: Sync all inventory slots from Patricia to Gen21. Returns a complete list of slots with full details.
+      operationId: syncInventorySlots
       security:
         - HmacAuth: []
-      parameters:
-        - name: device_id
-          in: query
-          description: Filter by specific device ID
-          schema:
-            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
       responses:
         "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DeviceCapabilitiesResponse"
+                $ref: "#/components/schemas/InventorySlotSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-  /devices/v1/{device_id}:
+  /showtimes/v1/categories:
     get:
       tags:
-        - Device
-      summary: Get device details
-      description: |-
-        Retrieve details of a specific device.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as DeviceUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /devices/v1/{device_id}
-            API->>UseCase: GetDeviceById(deviceId)
-            UseCase->>Repo: FindById(deviceId)
-            Repo->>PostgreSQL: SELECT WHERE device_id = ?
-            PostgreSQL-->>Repo: device or null
-            Repo-->>UseCase: Device or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: DeviceResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getDeviceById
+        - Showtime
+      summary: Get showtime categories
+      description: Retrieve all showtime categories.
+      operationId: getShowtimeCategories
       security:
         - HmacAuth: []
-      parameters:
-        - name: device_id
-          in: path
-          required: true
-          description: ID of the device
-          schema:
-            type: string
       responses:
         "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DeviceDetailResponse"
+                $ref: "#/components/schemas/ShowtimeCategoriesResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /showtimes/v1/schedules:
+    get:
+      tags:
+        - Showtime
+      summary: Get showtime schedules
+      description: Retrieve all active showtime schedules.
+      operationId: getShowtimeSchedules
+      security:
+        - HmacAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowtimeSchedulesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /showtimes/v1/slots:
+    get:
+      tags:
+        - Showtime
+      summary: Get slot configuration
+      description: Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.
+      operationId: getShowtimeSlots
+      security:
+        - HmacAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlotConfigResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
   /campaigns/v1/commercial:
@@ -719,32 +322,7 @@ paths:
       tags:
         - Campaign
       summary: Create commercial campaign
-      description: |-
-        Inject a commercial campaign from consumer system to Patricia.
-
-        Campaign injection SUCCESS = Patricia accepted request + campaign persisted + MQTT distributed.
-
-        Requires HMAC-MD5 signature validation via KrakenD gateway.
-
-        ```mermaid
-        sequenceDiagram
-            actor Gen21 as Gen21
-            participant API as API Handler
-            participant UseCase as CampaignUseCase
-            participant Repo as CampaignRepository
-            participant MQTT as MQTTService
-            participant PostgreSQL as Database
-            Gen21->>API: POST /campaigns/v1/commercial
-            API->>UseCase: CreateCampaign(campaignData)
-            UseCase->>Repo: Create(campaignData)
-            Repo->>PostgreSQL: INSERT campaign
-            PostgreSQL-->>Repo: campaign created
-            Repo-->>UseCase: Campaign
-            UseCase->>MQTT: PublishDistributionCommand(campaign)
-            MQTT-->>UseCase: publish result
-            UseCase-->>API: CampaignCreateResponse
-            API-->>Gen21: 200 OK (campaign accepted, no pricing)
-        ```
+      description: Inject a commercial campaign from Gen21 to Patricia.
       operationId: createCommercialCampaign
       security:
         - HmacAuth: []
@@ -776,30 +354,7 @@ paths:
       tags:
         - Campaign
       summary: Update commercial campaign
-      description: |-
-        Update an existing commercial campaign.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as CampaignUseCase
-            participant Repo as CampaignRepository
-            participant PostgreSQL as Database
-            Client->>API: PUT /campaigns/v1/commercial/{campaign_id}
-            API->>UseCase: UpdateCampaign(campaignId, updateData)
-            UseCase->>Repo: FindById(campaignId)
-            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
-            PostgreSQL-->>Repo: campaign or null
-            Repo-->>UseCase: Campaign or nil
-            UseCase->>UseCase: Check if found
-            UseCase->>Repo: Update(campaign)
-            Repo->>PostgreSQL: UPDATE campaign
-            PostgreSQL-->>Repo: update result
-            Repo-->>UseCase: updated campaign
-            UseCase-->>API: CampaignUpdateResponse
-            API-->>Client: 200 OK
-        ```
+      description: Update an existing commercial campaign.
       operationId: updateCommercialCampaign
       security:
         - HmacAuth: []
@@ -838,30 +393,7 @@ paths:
       tags:
         - Campaign
       summary: Cancel commercial campaign
-      description: |-
-        Cancel an existing commercial campaign. This is an irreversible action.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as CampaignUseCase
-            participant Repo as CampaignRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /campaigns/v1/commercial/{campaign_id}/cancel
-            API->>UseCase: CancelCampaign(campaignId)
-            UseCase->>Repo: FindById(campaignId)
-            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
-            PostgreSQL-->>Repo: campaign or null
-            Repo-->>UseCase: Campaign or nil
-            UseCase->>UseCase: Check if found and cancellable
-            UseCase->>Repo: UpdateStatus(campaignId, CANCELLED)
-            Repo->>PostgreSQL: UPDATE campaign status
-            PostgreSQL-->>Repo: update result
-            Repo-->>UseCase: success
-            UseCase-->>API: CampaignCancelResponse
-            API-->>Client: 200 OK
-        ```
+      description: Cancel an existing commercial campaign.
       operationId: cancelCommercialCampaign
       security:
         - HmacAuth: []
@@ -881,7 +413,6 @@ paths:
                 reason:
                   type: string
                   description: Reason for cancellation
-                  example: Client requested cancellation
       responses:
         "200":
           description: Campaign cancelled successfully
@@ -904,26 +435,7 @@ paths:
       tags:
         - Campaign
       summary: Get campaign status
-      description: |-
-        Check the distribution status of a campaign.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as CampaignUseCase
-            participant Repo as CampaignRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /campaigns/v1/commercial/{campaign_id}/status
-            API->>UseCase: GetCampaignStatus(campaignId)
-            UseCase->>Repo: FindById(campaignId)
-            Repo->>PostgreSQL: SELECT WHERE campaign_id = ?
-            PostgreSQL-->>Repo: campaign or null
-            Repo-->>UseCase: Campaign or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: CampaignStatusResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
+      description: Check the distribution status of a campaign.
       operationId: getCampaignStatus
       security:
         - HmacAuth: []
@@ -952,25 +464,7 @@ paths:
       tags:
         - Campaign
       summary: Bulk campaign status check
-      description: |-
-        Check the status of multiple campaigns in bulk.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as CampaignUseCase
-            participant Repo as CampaignRepository
-            participant PostgreSQL as Database
-            Client->>API: POST /campaigns/v1/commercial/status/bulk
-            API->>UseCase: GetBulkCampaignStatus(campaignIds)
-            UseCase->>Repo: FindByIds(campaignIds)
-            Repo->>PostgreSQL: SELECT WHERE campaign_id IN (?)
-            PostgreSQL-->>Repo: campaigns list
-            Repo-->>UseCase: []Campaign
-            UseCase-->>API: BulkCampaignStatusResponse
-            API-->>Client: 200 OK
-        ```
+      description: Check the status of multiple campaigns in bulk.
       operationId: bulkCampaignStatus
       security:
         - HmacAuth: []
@@ -988,9 +482,6 @@ paths:
                   items:
                     type: string
                   description: List of Patricia campaign IDs
-                  example:
-                    - PAT-CMP-001
-                    - PAT-CMP-002
       responses:
         "200":
           description: Successful response
@@ -1033,648 +524,22 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
+                  status:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: CMP20003
+                      message:
+                        type: string
+                        example: Replay accepted
+                  data:
+                    type: object
+                    properties:
+                      campaign_id:
+                        type: string
         "400":
           $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /showtimes/v1/categories:
-    get:
-      tags:
-        - Showtime
-      summary: Get showtime categories
-      description: |-
-        Retrieve all showtime categories.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as ShowtimeUseCase
-            participant Repo as ShowtimeRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /showtimes/v1/categories
-            API->>UseCase: GetShowtimeCategories()
-            UseCase->>Repo: GetAllCategories()
-            Repo->>PostgreSQL: SELECT all showtime categories
-            PostgreSQL-->>Repo: categories list
-            Repo-->>UseCase: []ShowtimeCategory
-            UseCase-->>API: ShowtimeCategoriesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getShowtimeCategories
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShowtimeCategoriesResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /showtimes/v1/categories/{showtime_id}:
-    get:
-      tags:
-        - Showtime
-      summary: Get showtime category details
-      description: |-
-        Retrieve details of a specific showtime category.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as ShowtimeUseCase
-            participant Repo as ShowtimeRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /showtimes/v1/categories/{showtime_id}
-            API->>UseCase: GetShowtimeCategoryById(showtimeId)
-            UseCase->>Repo: FindCategoryById(showtimeId)
-            Repo->>PostgreSQL: SELECT WHERE showtime_id = ?
-            PostgreSQL-->>Repo: category or null
-            Repo-->>UseCase: ShowtimeCategory or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: ShowtimeCategoryResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getShowtimeCategoryById
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: showtime_id
-          in: path
-          required: true
-          description: ID of the showtime category
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShowtimeCategoryDetailResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /showtimes/v1/schedules:
-    get:
-      tags:
-        - Showtime
-      summary: Get showtime schedules
-      description: |-
-        Retrieve all active showtime schedules.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as ShowtimeUseCase
-            participant Repo as ShowtimeRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /showtimes/v1/schedules
-            API->>UseCase: GetShowtimeSchedules()
-            UseCase->>Repo: GetAllSchedules()
-            Repo->>PostgreSQL: SELECT all showtime schedules
-            PostgreSQL-->>Repo: schedules list
-            Repo-->>UseCase: []ShowtimeSchedule
-            UseCase-->>API: ShowtimeSchedulesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getShowtimeSchedules
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShowtimeSchedulesResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /showtimes/v1/schedules/active:
-    get:
-      tags:
-        - Showtime
-      summary: Get active showtime schedules
-      description: |-
-        Retrieve showtime schedules that are currently active based on current time.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as ShowtimeUseCase
-            participant Repo as ShowtimeRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /showtimes/v1/schedules/active
-            API->>UseCase: GetActiveShowtimeSchedules(time)
-            UseCase->>Repo: FindActiveSchedules(time)
-            Repo->>PostgreSQL: SELECT active schedules based on time
-            PostgreSQL-->>Repo: active schedules
-            Repo-->>UseCase: []ShowtimeSchedule
-            UseCase-->>API: ActiveShowtimeSchedulesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getActiveShowtimeSchedules
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShowtimeSchedulesResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /showtimes/v1/slots:
-    get:
-      tags:
-        - Showtime
-      summary: Get slot configuration
-      description: |-
-        Retrieve showtime slot configuration. Per STO agreement: 1 Slot = 30 seconds.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as ShowtimeUseCase
-            participant Repo as ShowtimeRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /showtimes/v1/slots
-            API->>UseCase: GetShowtimeSlotsConfiguration()
-            UseCase->>Repo: GetSlotConfiguration()
-            Repo->>PostgreSQL: SELECT slot configuration
-            PostgreSQL-->>Repo: slot config list
-            Repo-->>UseCase: []ShowtimeSlot
-            UseCase-->>API: ShowtimeSlotsConfigResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getSlotConfiguration
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SlotConfigResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /rate-cards/v1:
-    get:
-      tags:
-        - Rate Card
-      summary: Get all rate cards
-      description: |-
-        Retrieve all rate cards.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as RateCardUseCase
-            participant Repo as RateCardRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /rate-cards/v1
-            API->>UseCase: GetAllRateCards(activeOnly)
-            UseCase->>Repo: FindAll(activeOnly)
-            Repo->>PostgreSQL: SELECT rate cards
-            PostgreSQL-->>Repo: rate cards list
-            Repo-->>UseCase: []RateCard
-            UseCase-->>API: RateCardsResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getRateCards
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: active
-          in: query
-          description: Filter by active status
-          schema:
-            type: boolean
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateCardListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /rate-cards/v1/{rate_card_id}:
-    get:
-      tags:
-        - Rate Card
-      summary: Get rate card details
-      description: |-
-        Retrieve details of a specific rate card.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as RateCardUseCase
-            participant Repo as RateCardRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /rate-cards/v1/{rate_card_id}
-            API->>UseCase: GetRateCardById(rateCardId)
-            UseCase->>Repo: FindById(rateCardId)
-            Repo->>PostgreSQL: SELECT WHERE rate_card_id = ?
-            PostgreSQL-->>Repo: rate card or null
-            Repo-->>UseCase: RateCard or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: RateCardResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getRateCardById
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: rate_card_id
-          in: path
-          required: true
-          description: ID of the rate card
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateCardDetailResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /rate-cards/v1/active:
-    get:
-      tags:
-        - Rate Card
-      summary: Get active rate cards
-      description: |-
-        Retrieve all currently active rate cards.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as RateCardUseCase
-            participant Repo as RateCardRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /rate-cards/v1/active
-            API->>UseCase: GetActiveRateCards()
-            UseCase->>Repo: FindActive()
-            Repo->>PostgreSQL: SELECT active rate cards
-            PostgreSQL-->>Repo: active rate cards list
-            Repo-->>UseCase: []RateCard
-            UseCase-->>API: RateCardsResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getActiveRateCards
-      security:
-        - HmacAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateCardListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /rate-cards/v1/validate:
-    post:
-      tags:
-        - Rate Card
-      summary: Validate rate card
-      description: |-
-        Validate a rate card for campaign pricing. Patricia provides base_price reference only.
-
-        ```mermaid
-        sequenceDiagram
-            actor Gen21 as Gen21
-            participant API as API Handler
-            participant UseCase as RateCardUseCase
-            participant Repo as RateCardRepository
-            participant PostgreSQL as Database
-            Gen21->>API: POST /rate-cards/v1/validate
-            API->>UseCase: ValidateRateCard(validationData)
-            UseCase->>Repo: FindMatchingRateCard(validationData)
-            Repo->>PostgreSQL: SELECT matching rate card
-            PostgreSQL-->>Repo: matching rate card or null
-            Repo-->>UseCase: RateCard or nil
-            UseCase->>UseCase: Perform validation logic
-            UseCase-->>API: RateCardValidationResponse
-            API-->>Gen21: 200 OK (base_price only, no multiplier)
-        ```
-      operationId: validateRateCard
-      security:
-        - HmacAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RateCardValidationRequest"
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateCardValidationResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /rate-cards/v1/changes:
-    get:
-      tags:
-        - Rate Card
-      summary: Get incremental rate card changes
-      description: |-
-        Retrieve incremental sync of rate card changes since a specific timestamp.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as RateCardUseCase
-            participant Repo as RateCardRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /rate-cards/v1/changes?updated_after=
-            API->>UseCase: GetChangedRateCards(updatedAfter)
-            UseCase->>Repo: FindChanges(updatedAfter)
-            Repo->>PostgreSQL: SELECT changed rate cards
-            PostgreSQL-->>Repo: changed rate cards list
-            Repo-->>UseCase: []RateCardChange
-            UseCase-->>API: RateCardChangesResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getRateCardChanges
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: updated_after
-          in: query
-          required: true
-          description: ISO8601 timestamp to get changes after
-          schema:
-            type: string
-            format: date-time
-            example: "2026-05-12T10:00:00Z"
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateCardChangesResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /inventories/v1/slots:
-    get:
-      tags:
-        - Inventory Slot
-      summary: Get inventory slots
-      description: |-
-        Retrieve all inventory slots.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as InventoryUseCase
-            participant Repo as InventoryRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /inventories/v1/slots
-            API->>UseCase: GetInventorySlots(filters)
-            UseCase->>Repo: FindSlots(filters)
-            Repo->>PostgreSQL: SELECT inventory slots
-            PostgreSQL-->>Repo: slots list
-            Repo-->>UseCase: []InventorySlot
-            UseCase-->>API: InventorySlotsResponse
-            API-->>Client: 200 OK
-        ```
-      operationId: getInventorySlots
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: location_id
-          in: query
-          description: Filter by location ID
-          schema:
-            type: string
-            format: uuid
-        - name: showtime_id
-          in: query
-          description: Filter by showtime ID
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventorySlotsResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /inventories/v1/slots/availability:
-    get:
-      tags:
-        - Inventory Slot
-      summary: Get slot availability
-      description: |-
-        Retrieve slot availability based on time window.
-
-        ```mermaid
-        sequenceDiagram
-            actor Gen21 as Gen21
-            participant API as API Handler
-            participant UseCase as InventoryUseCase
-            participant Repo as InventoryRepository
-            participant PostgreSQL as Database
-            Gen21->>API: GET /inventories/v1/slots/availability
-            API->>UseCase: GetSlotAvailability(query)
-            UseCase->>Repo: GetAvailabilityStats(query)
-            Repo->>PostgreSQL: SELECT availability stats
-            PostgreSQL-->>Repo: availability stats
-            Repo-->>UseCase: AvailabilityStats (with base_price per showtime)
-            UseCase-->>API: SlotAvailabilityResponse
-            API-->>Gen21: 200 OK
-        ```
-      operationId: getSlotAvailability
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: location_ids
-          in: query
-          description: Comma-separated list of location IDs
-          schema:
-            type: string
-        - name: showtime_id
-          in: query
-          description: Filter by showtime ID
-          schema:
-            type: string
-        - name: start_date
-          in: query
-          description: Start date for availability check
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          description: End date for availability check
-          schema:
-            type: string
-            format: date
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SlotAvailabilityResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /inventories/v1/slots/check:
-    post:
-      tags:
-        - Inventory Slot
-      summary: Check slot availability
-      description: |-
-        Check slot availability before booking. Returns available slots with base_price per showtime.
-
-        ```mermaid
-        sequenceDiagram
-            actor Gen21 as Gen21
-            participant API as API Handler
-            participant UseCase as InventoryUseCase
-            participant Repo as InventoryRepository
-            participant PostgreSQL as Database
-            Gen21->>API: POST /inventories/v1/slots/check
-            API->>UseCase: CheckSlotAvailability(checkData)
-            UseCase->>Repo: FindAvailableSlots(checkData)
-            Repo->>PostgreSQL: SELECT available slots
-            PostgreSQL-->>Repo: available slots
-            UseCase-->>API: SlotCheckResponse (with base_price per showtime)
-            API-->>Gen21: 200 OK
-        ```
-      operationId: checkSlotAvailability
-      security:
-        - HmacAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CheckSlotAvailabilityRequest"
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CheckSlotAvailabilityResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /inventories/v1/slots/{slot_id}:
-    get:
-      tags:
-        - Inventory Slot
-      summary: Get inventory slot details
-      description: |-
-        Retrieve details of a specific inventory slot.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as InventoryUseCase
-            participant Repo as InventoryRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /inventories/v1/slots/{slot_id}
-            API->>UseCase: GetSlotById(slotId)
-            UseCase->>Repo: FindById(slotId)
-            Repo->>PostgreSQL: SELECT WHERE slot_id = ?
-            PostgreSQL-->>Repo: slot or null
-            Repo-->>UseCase: InventorySlot or nil
-            UseCase->>UseCase: Check if found
-            UseCase-->>API: InventorySlotResponse or Error
-            API-->>Client: 200 OK or 404 Not Found
-        ```
-      operationId: getInventorySlotById
-      security:
-        - HmacAuth: []
-      parameters:
-        - name: slot_id
-          in: path
-          required: true
-          description: ID of the inventory slot
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventorySlotDetailResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1686,29 +551,7 @@ paths:
       tags:
         - Health
       summary: Integration health check
-      description: |-
-        Check the health status of Patricia integration services.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as HealthUseCase
-            participant Repo as HealthRepository
-            participant DB as Database
-            participant MQTT as MQTTService
-            participant Storage as StorageService
-            Client->>API: GET /health/v1/integration
-            API->>UseCase: GetIntegrationHealth()
-            UseCase->>DB: CheckConnection()
-            DB-->>UseCase: connection status
-            UseCase->>MQTT: CheckConnectivity()
-            MQTT-->>UseCase: mqtt status
-            UseCase->>Storage: CheckAccessibility()
-            Storage-->>UseCase: storage status
-            UseCase-->>API: IntegrationHealthResponse
-            API-->>Client: 200 OK
-        ```
+      description: Check Patricia integration health status.
       operationId: getIntegrationHealth
       security:
         - HmacAuth: []
@@ -1725,23 +568,8 @@ paths:
     get:
       tags:
         - Health
-      summary: MQTT broker health check
-      description: |-
-        Check MQTT broker connectivity status.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as HealthUseCase
-            participant MQTT as MQTTService
-            Client->>API: GET /health/v1/mqtt
-            API->>UseCase: GetMQTTHealth()
-            UseCase->>MQTT: CheckConnectivity()
-            MQTT-->>UseCase: mqtt status
-            UseCase-->>API: MQTTHealthResponse
-            API-->>Client: 200 OK
-        ```
+      summary: MQTT health check
+      description: Check MQTT broker connectivity.
       operationId: getMqttHealth
       security:
         - HmacAuth: []
@@ -1759,25 +587,7 @@ paths:
       tags:
         - Health
       summary: Device health summary
-      description: |-
-        Get summary of device health status.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as HealthUseCase
-            participant Repo as DeviceRepository
-            participant PostgreSQL as Database
-            Client->>API: GET /health/v1/devices
-            API->>UseCase: GetDeviceHealthSummary()
-            UseCase->>Repo: GetHealthStats()
-            Repo->>PostgreSQL: SELECT device health stats
-            PostgreSQL-->>Repo: health stats
-            Repo-->>UseCase: DeviceHealthStats
-            UseCase-->>API: DeviceHealthResponse
-            API-->>Client: 200 OK
-        ```
+      description: Get summary of device health status.
       operationId: getDeviceHealthSummary
       security:
         - HmacAuth: []
@@ -1795,22 +605,7 @@ paths:
       tags:
         - Health
       summary: Storage health check
-      description: |-
-        Check AWS S3 storage accessibility.
-
-        ```mermaid
-        sequenceDiagram
-            actor Client as Client
-            participant API as API Handler
-            participant UseCase as HealthUseCase
-            participant Storage as StorageService
-            Client->>API: GET /health/v1/storage
-            API->>UseCase: GetStorageHealth()
-            UseCase->>Storage: CheckAccessibility()
-            Storage-->>UseCase: storage status
-            UseCase-->>API: StorageHealthResponse
-            API-->>Client: 200 OK
-        ```
+      description: Check AWS S3 storage accessibility.
       operationId: getStorageHealth
       security:
         - HmacAuth: []
@@ -1823,8 +618,388 @@ paths:
                 $ref: "#/components/schemas/StorageHealthResponse"
         "500":
           $ref: "#/components/responses/InternalError"
+  /agencies/v1:
+    post:
+      tags:
+        - Agency
+      summary: Create new agency
+      description: Create a new agency in Patricia system.
+      operationId: createAgency
+      security:
+        - HmacAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgencyRequest"
+      responses:
+        "201":
+          description: Agency created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAgencyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags:
+        - Agency
+      summary: List all agencies
+      description: Retrieve a list of all agencies with optional filtering.
+      operationId: listAgencies
+      security:
+        - HmacAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum:
+              - Draft
+              - Active
+              - Inactive
+              - Cancelled
+        - name: agency_type
+          in: query
+          description: Filter by agency type
+          schema:
+            type: string
+            enum:
+              - Regular
+              - Premium
+        - name: search
+          in: query
+          description: Search by agency name or code
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgenciesListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /agencies/v1/{agency_id}:
+    put:
+      tags:
+        - Agency
+      summary: Update agency details
+      description: Update an existing agency's details.
+      operationId: updateAgency
+      security:
+        - HmacAuth: []
+      parameters:
+        - name: agency_id
+          in: path
+          required: true
+          description: Agency ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgencyRequest"
+      responses:
+        "200":
+          description: Agency updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateAgencyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - Agency
+      summary: Delete agency
+      description: Delete an agency from the system.
+      operationId: deleteAgency
+      security:
+        - HmacAuth: []
+      parameters:
+        - name: agency_id
+          in: path
+          required: true
+          description: Agency ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Agency deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteAgencyResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /playlist:
+    post:
+      tags:
+        - Playlist
+      summary: Create playlist
+      description: Create a new playlist with video contents for a channel.
+      operationId: createPlaylist
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlaylistRequest"
+      responses:
+        "200":
+          description: Playlist created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatePlaylistResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags:
+        - Playlist
+      summary: Update playlist
+      description: Update an existing playlist's details and video contents.
+      operationId: updatePlaylist
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlaylistRequest"
+      responses:
+        "200":
+          description: Playlist updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatePlaylistResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - Playlist
+      summary: Delete playlist
+      description: Delete a playlist by ID.
+      operationId: deletePlaylist
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Playlist ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Playlist deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletePlaylistResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags:
+        - Playlist
+      summary: Get all playlists
+      description: Retrieve all playlists with pagination, filtering, and sorting.
+      operationId: getAllPlaylists
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: channel_id
+          in: query
+          description: Filter by channel ID
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          description: Filter by status. Supports multiple values (e.g., status[0]=DRAFT&status[1]=APPROVE)
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - DRAFT
+                - PENDING_PRODUCTION
+                - REJECTED_PRODUCTION
+                - PRODUCTION
+                - PENDING_BROADCAST_READY
+                - REJECTED_BROADCAST_READY
+                - BROADCAST_READY
+                - APPROVE
+                - REJECT
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 10
+        - name: sort_by
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum:
+              - playlist_name
+              - showtime
+              - channel_name
+        - name: sort_dir
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+        - name: search_by
+          in: query
+          description: Search field
+          schema:
+            type: string
+            enum:
+              - playlist_name
+        - name: search_value
+          in: query
+          description: Search keyword
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: until
+          in: query
+          description: Filter end date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetAllPlaylistsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /playlist/detail:
+    get:
+      tags:
+        - Playlist
+      summary: Get playlist by ID
+      description: Retrieve a playlist's full details including video list.
+      operationId: findPlaylistById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Playlist ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindPlaylistByIdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token authentication for internal Patricia services.
+
+        **Required Headers:**
+        - `Authorization: Bearer <jwt_token>`
+        - `X-User-Id`: User UUID (set by auth middleware)
+        - `X-Organization-Id`: Organization UUID (set by auth middleware)
     HmacAuth:
       type: apiKey
       in: header
@@ -1850,63 +1025,15 @@ components:
         - `x_signature`: Hex-encoded HMAC-MD5 signature
 
         **Clock Skew:** 300 seconds (5 minutes)
-
-        **Example (POST):**
-        ```bash
-        TIMESTAMP=$(date +%s)
-        API_KEY="xxxx"
-        SECRET_KEY="secret-key-1"
-        SIGNATURE=$(echo -n "${API_KEY}${SECRET_KEY}${TIMESTAMP}" | openssl dgst -md5 -hmac "${SECRET_KEY}" -hex | awk '{print $NF}')
-
-        curl -X POST https://api.patricia.io/campaigns/v1/commercial \
-          -H "ChannelId: G21" \
-          -H "Api_key: ${API_KEY}" \
-          -H "X-Timestamp: ${TIMESTAMP}" \
-          -H "X-Signature: ${SIGNATURE}" \
-          -H "Content-Type: application/json" \
-          -d '{"external_campaign_id":"GEN21-CMP-001",...}'
-        ```
-
-        **Example (GET):**
-        ```bash
-        curl "https://api.patricia.io/master/v1/locations/hierarchy?channel_id=G21&api_key=${API_KEY}&x_timestamp=${TIMESTAMP}&x_signature=${SIGNATURE}"
-        ```
   schemas:
-    GatewayErrorResponse:
-      description: Error response from KrakenD gateway (HMAC authentication layer)
+    SyncRequest:
       type: object
       properties:
-        error:
+        last_sync_at:
           type: string
-          description: Gateway error message
-      example:
-        error: invalid signature
-    ServiceErrorResponse:
-      description: Error response from Patricia service (business logic layer)
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              description: Service-specific error code
-            message:
-              type: string
-              description: Human-readable error description
-      example:
-        status:
-          code: MST40101
-          message: Unauthorized
-    ErrorResponse:
-      description: Generic error response (deprecated, use GatewayErrorResponse or ServiceErrorResponse)
-      type: object
-      properties:
-        error:
-          type: string
-          description: Error message
-      example:
-        error: invalid signature
+          format: date-time
+          description: Last sync timestamp. If provided, only returns data updated after this time
+          example: "2026-05-20T10:00:00Z"
     Location:
       type: object
       properties:
@@ -1914,11 +1041,9 @@ components:
           type: string
           format: uuid
           description: UUID of the location
-          example: CITY-001
         name:
           type: string
           description: Name of the location
-          example: Bandung
         type:
           type: string
           enum:
@@ -1928,17 +1053,24 @@ components:
         timezone:
           type: string
           description: IANA timezone identifier
-          example: Asia/Jakarta
         parent_id:
           type: string
           format: uuid
-          description: Parent location ID (for hierarchical relationships)
-        children:
-          type: array
-          items:
-            $ref: "#/components/schemas/Location"
-          description: Child locations (for hierarchy)
-    LocationHierarchyResponse:
+          description: Parent location ID
+        coordinates:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    LocationSyncResponse:
       type: object
       properties:
         status:
@@ -1949,137 +1081,66 @@ components:
               example: MST20000
             message:
               type: string
-              example: Location hierarchy successfully retrieved
+              example: Locations synced successfully
         data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Location"
-    LocationListResponse:
-      type: object
-      properties:
-        status:
           type: object
           properties:
-            code:
-              type: string
-              example: MST20001
-            message:
-              type: string
-              example: Locations successfully retrieved
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Location"
-        pagination:
-          type: object
-          properties:
-            page:
-              type: integer
-            limit:
-              type: integer
-            total:
-              type: integer
-    LocationDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: MST20002
-            message:
-              type: string
-              example: Location details successfully retrieved
-        data:
-          $ref: "#/components/schemas/Location"
-    LocationChangesResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: MST20003
-            message:
-              type: string
-              example: Location changes successfully retrieved
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              location_id:
-                type: string
-                format: uuid
-              change_type:
-                type: string
-                enum:
-                  - CREATED
-                  - UPDATED
-                  - DELETED
-              updated_at:
-                type: string
-                format: date-time
-              data:
+            locations:
+              type: array
+              items:
                 $ref: "#/components/schemas/Location"
-    LocationValidationRequest:
-      type: object
-      required:
-        - location_ids
-      properties:
-        location_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          description: List of location IDs to validate
-    LocationValidationResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
+            total_count:
+              type: integer
+            synced_at:
               type: string
-              example: MST20004
-            message:
-              type: string
-              example: Location validation completed
-        data:
-          type: object
-          properties:
-            valid_locations:
-              type: array
-              items:
-                type: string
-            invalid_locations:
-              type: array
-              items:
-                type: string
-    OrganizationSyncRequest:
+              format: date-time
+    Organization:
       type: object
-      required:
-        - organization_id
-        - organization_name
       properties:
         organization_id:
           type: string
           format: uuid
-          description: UUID of the organization
-          example: ORG-001
         organization_name:
           type: string
-          description: Legal name of the organization
-          example: ABC Corp
         brand_name:
           type: string
-          description: Brand/trading name
-          example: ABC
         industry_id:
           type: string
-          description: Product industry classification ID
+        industry_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+        address:
+          type: object
+          properties:
+            address_1:
+              type: string
+            address_2:
+              type: string
+            city:
+              type: string
+            post_code:
+              type: string
+            country:
+              type: string
+        contact_person:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     OrganizationSyncResponse:
       type: object
       properties:
@@ -2091,154 +1152,71 @@ components:
               example: ORG20000
             message:
               type: string
-              example: Organization synced successfully
+              example: Organizations synced successfully
         data:
           type: object
           properties:
-            external_client_id:
-              type: string
-              description: Client ID assigned by consumer system
-              example: GEN21-CLI-001
-    OrganizationDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: ORG20001
-            message:
-              type: string
-              example: Organization details successfully retrieved
-        data:
-          type: object
-          properties:
-            organization_id:
-              type: string
-              format: uuid
-            organization_name:
-              type: string
-            brand_name:
-              type: string
-            industry_id:
-              type: string
-            created_at:
+            organizations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Organization"
+            total_count:
+              type: integer
+            synced_at:
               type: string
               format: date-time
-            updated_at:
-              type: string
-              format: date-time
-    ProductIndustryResponse:
+    Device:
       type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: ORG20002
-            message:
-              type: string
-              example: Product industry data successfully retrieved
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              industry_id:
-                type: string
-              industry_name:
-                type: string
-              categories:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    category_id:
-                      type: string
-                    category_name:
-                      type: string
-                    sub_categories:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          sub_category_id:
-                            type: string
-                          sub_category_name:
-                            type: string
-                          products:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                product_id:
-                                  type: string
-                                product_name:
-                                  type: string
-    DeviceCapabilities:
-      type: object
-      properties:
-        max_resolution:
-          type: string
-          description: Maximum display resolution
-          example: 1920x1080
-        video_codec:
-          type: array
-          items:
-            type: string
-          description: Supported video codecs
-          example:
-            - H264
-        storage_mb:
-          type: integer
-          description: Available storage in megabytes
-          example: 16000
-        audio_supported:
-          type: boolean
-          description: Whether device supports audio
-        interactive_supported:
-          type: boolean
-          description: Whether device supports interactive content
-    DeviceSyncRequest:
-      type: object
-      required:
-        - device_id
-        - device_label
-        - organization_id
-        - location_id
       properties:
         device_id:
           type: string
-          description: Unique device identifier
-          example: DEV-001
+          format: uuid
         device_label:
           type: string
-          description: Human-readable device label
-          example: Lobby TV
         organization_id:
           type: string
           format: uuid
-          description: Owning organization ID
-          example: ORG-001
+        organization_name:
+          type: string
         location_id:
           type: string
           format: uuid
-          description: Location ID where device is installed
-          example: CITY-001
+        location_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+        connection_status:
+          type: string
+          enum:
+            - ONLINE
+            - OFFLINE
+        last_seen:
+          type: string
+          format: date-time
         latitude:
           type: number
-          format: double
-          description: GPS latitude
-          example: -6.123
         longitude:
           type: number
-          format: double
-          description: GPS longitude
-          example: 106.123
         capabilities:
-          $ref: "#/components/schemas/DeviceCapabilities"
+          type: object
+          properties:
+            max_resolution:
+              type: string
+            video_codec:
+              type: array
+              items:
+                type: string
+            storage_mb:
+              type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     DeviceSyncResponse:
       type: object
       properties:
@@ -2250,209 +1228,244 @@ components:
               example: DEV20000
             message:
               type: string
-              example: Device synced successfully
+              example: Devices synced successfully
         data:
           type: object
           properties:
-            inventory_status:
-              type: string
-              enum:
-                - ACTIVE
-                - PENDING
-                - INACTIVE
-              example: ACTIVE
-    DeviceAvailabilityResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: DEV20001
-            message:
-              type: string
-              example: Device availability successfully retrieved
-        data:
-          type: object
-          properties:
-            available_devices:
+            devices:
+              type: array
+              items:
+                $ref: "#/components/schemas/Device"
+            total_count:
               type: integer
-            total_devices:
-              type: integer
-            unavailable_devices:
-              type: integer
-    DeviceHealthCheckRequest:
-      type: object
-      properties:
-        device_ids:
-          type: array
-          items:
-            type: string
-          description: List of device IDs to check
-    DeviceHealthCheckResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: DEV20002
-            message:
-              type: string
-              example: Device health check completed
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              device_id:
-                type: string
-              status:
-                type: string
-                enum:
-                  - ONLINE
-                  - OFFLINE
-              last_seen:
-                type: string
-                format: date-time
-    DeviceCapabilitiesResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: DEV20003
-            message:
-              type: string
-              example: Device capabilities successfully retrieved
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              capability_id:
-                type: string
-              capability_name:
-                type: string
-              description:
-                type: string
-    DeviceDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: DEV20004
-            message:
-              type: string
-              example: Device details successfully retrieved
-        data:
-          type: object
-          properties:
-            device_id:
-              type: string
-            device_label:
-              type: string
-            organization_id:
-              type: string
-              format: uuid
-            location_id:
-              type: string
-              format: uuid
-            latitude:
-              type: number
-            longitude:
-              type: number
-            status:
-              type: string
-              enum:
-                - ACTIVE
-                - INACTIVE
-            capabilities:
-              $ref: "#/components/schemas/DeviceCapabilities"
-            created_at:
+            synced_at:
               type: string
               format: date-time
-            updated_at:
+    RateCard:
+      type: object
+      properties:
+        rate_card_id:
+          type: string
+          format: uuid
+        showtime_id:
+          type: string
+          format: uuid
+        showtime_code:
+          type: string
+        showtime_name:
+          type: string
+        location_id:
+          type: string
+          format: uuid
+        location_name:
+          type: string
+        slot_duration_seconds:
+          type: integer
+        currency:
+          type: string
+        base_price:
+          type: number
+        effective_start_date:
+          type: string
+          format: date
+        effective_end_date:
+          type: string
+          format: date
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RateCardSyncResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RTC20000
+            message:
+              type: string
+              example: Rate cards synced successfully
+        data:
+          type: object
+          properties:
+            rate_cards:
+              type: array
+              items:
+                $ref: "#/components/schemas/RateCard"
+            total_count:
+              type: integer
+            synced_at:
               type: string
               format: date-time
-    CampaignSchedule:
+    InventorySlot:
       type: object
-      required:
-        - start_at
-        - end_at
       properties:
-        start_at:
+        slot_id:
           type: string
-          format: date-time
-          description: Campaign start time (ISO8601 UTC)
-          example: "2026-05-12T00:00:00Z"
-        end_at:
+          format: uuid
+        location_id:
           type: string
-          format: date-time
-          description: Campaign end time (ISO8601 UTC)
-          example: "2026-05-20T00:00:00Z"
+          format: uuid
+        location_name:
+          type: string
+        showtime_id:
+          type: string
+          format: uuid
+        showtime_code:
+          type: string
+        date:
+          type: string
+          format: date
+        start_time:
+          type: string
+        end_time:
+          type: string
         timezone:
           type: string
-          description: IANA timezone for scheduling
-          example: Asia/Jakarta
-    CampaignTarget:
-      type: object
-      properties:
-        device_ids:
-          type: array
-          items:
-            type: string
-          description: Specific device IDs to target (optional if location_ids provided)
-        location_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          description: Location IDs to target (optional if device_ids provided)
-          example:
-            - CITY-001
-    CampaignMedia:
-      type: object
-      required:
-        - media_id
-        - media_type
-        - download_url
-        - sha256
-      properties:
-        media_id:
-          type: string
-          description: Unique media identifier
-          example: MEDIA-001
-        media_type:
-          type: string
-          enum:
-            - VIDEO
-            - IMAGE
-          description: Type of media content
-        download_url:
-          type: string
-          format: uri
-          description: URL to download the media asset
-          example: https://s3.amazonaws.com/bucket/media.mp4
-        sha256:
-          type: string
-          description: SHA-256 hash of the media file for integrity verification
-          example: xxxxx
-        duration_seconds:
+        slot_duration_seconds:
           type: integer
-          description: Duration of the media in seconds
+        available:
+          type: boolean
+        reserved:
+          type: boolean
+        pricing:
+          type: object
+          properties:
+            base_price:
+              type: number
+            currency:
+              type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    InventorySlotSyncResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INV20000
+            message:
+              type: string
+              example: Inventory slots synced successfully
+        data:
+          type: object
+          properties:
+            slots:
+              type: array
+              items:
+                $ref: "#/components/schemas/InventorySlot"
+            total_count:
+              type: integer
+            synced_at:
+              type: string
+              format: date-time
+    ShowtimeCategory:
+      type: object
+      properties:
+        showtime_id:
+          type: string
+          format: uuid
+        showtime_code:
+          type: string
+        showtime_name:
+          type: string
+        description:
+          type: string
+        priority:
+          type: integer
+        active:
+          type: boolean
+    ShowtimeCategoriesResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SWT20000
+            message:
+              type: string
+              example: Showtime categories successfully retrieved
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShowtimeCategory"
+    ShowtimeSchedule:
+      type: object
+      properties:
+        schedule_id:
+          type: string
+          format: uuid
+        showtime_id:
+          type: string
+          format: uuid
+        days:
+          type: array
+          items:
+            type: string
+        start_time:
+          type: string
+        end_time:
+          type: string
+        timezone:
+          type: string
+        slot_duration_seconds:
+          type: integer
+    ShowtimeSchedulesResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SWT20001
+            message:
+              type: string
+              example: Showtime schedules successfully retrieved
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShowtimeSchedule"
+    SlotConfig:
+      type: object
+      properties:
+        slot_duration_seconds:
+          type: integer
           example: 30
-        filesize_bytes:
+        slots_per_minute:
           type: integer
-          description: File size in bytes
-          example: 10485760
+          example: 2
+        description:
+          type: string
+          example: "Per STO agreement: 1 Slot = 30 seconds"
+    SlotConfigResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: SWT20002
+            message:
+              type: string
+              example: Slot configuration successfully retrieved
+        data:
+          $ref: "#/components/schemas/SlotConfig"
     CreateCampaignRequest:
       type: object
       required:
@@ -2465,36 +1478,71 @@ components:
       properties:
         external_campaign_id:
           type: string
-          description: Campaign ID from the external system
-          example: GEN21-CMP-001
         campaign_name:
           type: string
-          description: Human-readable campaign name
-          example: Promo Ramadhan
         organization_id:
           type: string
           format: uuid
-          description: Owning organization ID
-          example: ORG-001
         priority:
           type: integer
-          description: Campaign priority (1 = highest)
-          example: 1
+          default: 1
         schedule:
-          $ref: "#/components/schemas/CampaignSchedule"
+          type: object
+          required:
+            - start_at
+            - end_at
+          properties:
+            start_at:
+              type: string
+              format: date-time
+            end_at:
+              type: string
+              format: date-time
+            timezone:
+              type: string
         targets:
-          $ref: "#/components/schemas/CampaignTarget"
+          type: object
+          properties:
+            device_ids:
+              type: array
+              items:
+                type: string
+                format: uuid
+            location_ids:
+              type: array
+              items:
+                type: string
+                format: uuid
         media:
           type: array
           items:
-            $ref: "#/components/schemas/CampaignMedia"
-          minItems: 1
+            type: object
+            required:
+              - media_id
+              - media_type
+              - download_url
+              - sha256
+              - duration_seconds
+            properties:
+              media_id:
+                type: string
+              media_type:
+                type: string
+                enum:
+                  - VIDEO
+                  - IMAGE
+              download_url:
+                type: string
+              sha256:
+                type: string
+              duration_seconds:
+                type: integer
+              filesize_bytes:
+                type: integer
         timeshow_percent:
           type: integer
           minimum: 0
           maximum: 100
-          description: Percentage of timeshow allocation
-          example: 80
     CreateCampaignResponse:
       type: object
       properties:
@@ -2512,8 +1560,6 @@ components:
           properties:
             campaign_id:
               type: string
-              description: Patricia-assigned campaign ID
-              example: PAT-CMP-001
             status:
               type: string
               enum:
@@ -2525,11 +1571,9 @@ components:
                 - COMPLETED
                 - FAILED
                 - CANCELLED
-              example: ACCEPTED
             accepted_at:
               type: string
               format: date-time
-              example: "2026-05-12T10:00:00Z"
     UpdateCampaignRequest:
       type: object
       properties:
@@ -2538,9 +1582,27 @@ components:
         priority:
           type: integer
         schedule:
-          $ref: "#/components/schemas/CampaignSchedule"
+          type: object
+          properties:
+            start_at:
+              type: string
+              format: date-time
+            end_at:
+              type: string
+              format: date-time
+            timezone:
+              type: string
         targets:
-          $ref: "#/components/schemas/CampaignTarget"
+          type: object
+          properties:
+            device_ids:
+              type: array
+              items:
+                type: string
+            location_ids:
+              type: array
+              items:
+                type: string
         timeshow_percent:
           type: integer
           minimum: 0
@@ -2601,7 +1663,7 @@ components:
               example: CMP20003
             message:
               type: string
-              example: Campaign status successfully retrieved
+              example: Campaign status retrieved successfully
         data:
           type: object
           properties:
@@ -2620,27 +1682,18 @@ components:
                 - COMPLETED
                 - FAILED
                 - CANCELLED
-            progress:
+            distribution_progress:
               type: object
               properties:
-                distributed_devices:
-                  type: integer
                 total_devices:
                   type: integer
-                completion_percentage:
+                distributed_devices:
                   type: integer
-            timestamps:
-              type: object
-              properties:
-                accepted_at:
-                  type: string
-                  format: date-time
-                processing_started_at:
-                  type: string
-                  format: date-time
-                distributed_at:
-                  type: string
-                  format: date-time
+                failed_devices:
+                  type: integer
+            updated_at:
+              type: string
+              format: date-time
     BulkCampaignStatusResponse:
       type: object
       properties:
@@ -2652,541 +1705,11 @@ components:
               example: CMP20004
             message:
               type: string
-              example: Bulk campaign status retrieved
+              example: Bulk campaign status retrieved successfully
         data:
           type: array
           items:
-            type: object
-            properties:
-              campaign_id:
-                type: string
-              status:
-                type: string
-              updated_at:
-                type: string
-                format: date-time
-    ShowtimeCategory:
-      type: object
-      properties:
-        showtime_id:
-          type: string
-          example: SHOW-001
-        showtime_code:
-          type: string
-          example: PRIME_TIME
-        showtime_name:
-          type: string
-          example: Prime Time
-        description:
-          type: string
-          example: Jam tayang premium
-        priority:
-          type: integer
-          description: Priority level (1 = highest)
-          example: 1
-        active:
-          type: boolean
-          example: true
-    ShowtimeCategoriesResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: SHW20000
-            message:
-              type: string
-              example: Showtime categories successfully retrieved
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/ShowtimeCategory"
-    ShowtimeCategoryDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: SHW20001
-            message:
-              type: string
-              example: Showtime category details successfully retrieved
-        data:
-          $ref: "#/components/schemas/ShowtimeCategory"
-    ShowtimeSchedule:
-      type: object
-      properties:
-        schedule_id:
-          type: string
-          example: SCH-001
-        showtime_id:
-          type: string
-          example: SHOW-001
-        days:
-          type: array
-          items:
-            type: string
-            enum:
-              - MONDAY
-              - TUESDAY
-              - WEDNESDAY
-              - THURSDAY
-              - FRIDAY
-              - SATURDAY
-              - SUNDAY
-          example:
-            - MONDAY
-            - TUESDAY
-            - WEDNESDAY
-        start_time:
-          type: string
-          description: Schedule start time (HH:mm:ss)
-          example: "18:00:00"
-        end_time:
-          type: string
-          description: Schedule end time (HH:mm:ss)
-          example: "22:00:00"
-        timezone:
-          type: string
-          example: Asia/Jakarta
-        slot_duration_seconds:
-          type: integer
-          description: Duration of each slot in seconds
-          example: 30
-    ShowtimeSchedulesResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: SHW20002
-            message:
-              type: string
-              example: Showtime schedules successfully retrieved
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/ShowtimeSchedule"
-    SlotConfigResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: SHW20004
-            message:
-              type: string
-              example: Showtime slot configuration successfully retrieved
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              slot_id:
-                type: string
-              showtime_id:
-                type: string
-              duration_seconds:
-                type: integer
-                description: "Standard slot duration (per STO agreement: 30 seconds)"
-                example: 30
-              description:
-                type: string
-    RateCard:
-      type: object
-      properties:
-        rate_card_id:
-          type: string
-          example: RATE-001
-        showtime_id:
-          type: string
-          example: SHOW-001
-        showtime_code:
-          type: string
-          example: PRIME_TIME
-        slot_duration_seconds:
-          type: integer
-          example: 30
-        currency:
-          type: string
-          example: IDR
-        base_price:
-          type: number
-          format: double
-          description: Base price per slot (Patricia provides reference only)
-          example: 150000
-        effective_start_date:
-          type: string
-          format: date
-          example: "2026-05-01"
-        effective_end_date:
-          type: string
-          format: date
-          example: "2026-12-31"
-        active:
-          type: boolean
-          example: true
-    RateCardListResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: RTC20000
-            message:
-              type: string
-              example: Rate cards successfully retrieved
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/RateCard"
-    RateCardDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: RTC20001
-            message:
-              type: string
-              example: Rate card details successfully retrieved
-        data:
-          $ref: "#/components/schemas/RateCard"
-    RateCardValidationRequest:
-      type: object
-      required:
-        - showtime_id
-        - campaign_duration_days
-      properties:
-        showtime_id:
-          type: string
-          example: SHOW-001
-        campaign_duration_days:
-          type: integer
-          example: 7
-        slot_duration_seconds:
-          type: integer
-          example: 30
-    RateCardValidationResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: RTC20003
-            message:
-              type: string
-              example: Rate card validation successful
-        data:
-          type: object
-          properties:
-            valid:
-              type: boolean
-              description: Whether a matching rate card exists
-            matched_rate_card:
-              type: object
-              properties:
-                rate_card_id:
-                  type: string
-                base_price:
-                  type: number
-                  format: double
-                currency:
-                  type: string
-    RateCardChangesResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: RTC20004
-            message:
-              type: string
-              example: Rate card changes successfully retrieved
-        data:
-          type: array
-          items:
-            type: object
-            properties:
-              rate_card_id:
-                type: string
-              operation:
-                type: string
-                enum:
-                  - CREATE
-                  - UPDATE
-                  - DELETE
-              updated_at:
-                type: string
-                format: date-time
-    InventorySlot:
-      type: object
-      properties:
-        slot_id:
-          type: string
-        location_id:
-          type: string
-          format: uuid
-        showtime_id:
-          type: string
-        showtime_code:
-          type: string
-        date:
-          type: string
-          format: date
-        start_time:
-          type: string
-        end_time:
-          type: string
-        timezone:
-          type: string
-        slot_duration_seconds:
-          type: integer
-          example: 30
-        available:
-          type: boolean
-        reserved:
-          type: boolean
-        pricing:
-          type: object
-          properties:
-            base_price:
-              type: number
-              format: double
-            currency:
-              type: string
-    InventorySlotsResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: INV20000
-            message:
-              type: string
-              example: Inventory slots successfully retrieved
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/InventorySlot"
-    SlotAvailabilityResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: INV20001
-            message:
-              type: string
-              example: Slot availability successfully retrieved
-        data:
-          type: object
-          properties:
-            summary:
-              type: object
-              properties:
-                available_slots:
-                  type: integer
-                  example: 80
-                reserved_slots:
-                  type: integer
-                  example: 20
-                total_slots:
-                  type: integer
-                  example: 120
-            by_location:
-              type: array
-              items:
-                type: object
-                properties:
-                  location_id:
-                    type: string
-                  available_slots:
-                    type: integer
-                  reserved_slots:
-                    type: integer
-                  total_slots:
-                    type: integer
-            by_showtime:
-              type: array
-              items:
-                type: object
-                properties:
-                  showtime_id:
-                    type: string
-                  showtime_code:
-                    type: string
-                  available_slots:
-                    type: integer
-                  reserved_slots:
-                    type: integer
-                  total_slots:
-                    type: integer
-                  pricing:
-                    type: object
-                    properties:
-                      base_price:
-                        type: number
-                        format: double
-                      currency:
-                        type: string
-    CheckSlotAvailabilityRequest:
-      type: object
-      required:
-        - location_ids
-        - showtime_id
-        - start_date
-        - end_date
-      properties:
-        location_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          example:
-            - CITY-001
-        showtime_id:
-          type: string
-          example: SHOW-001
-        start_date:
-          type: string
-          format: date
-          example: "2026-05-12"
-        end_date:
-          type: string
-          format: date
-          example: "2026-05-20"
-    CheckSlotAvailabilityResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: INV20002
-            message:
-              type: string
-              example: Slot availability check completed
-        data:
-          type: object
-          properties:
-            available_slots:
-              type: integer
-              description: Number of available slots
-              example: 80
-            reserved_slots:
-              type: integer
-              description: Number of reserved slots
-              example: 20
-            total_slots:
-              type: integer
-              description: Total number of slots
-              example: 120
-            details:
-              type: array
-              items:
-                type: object
-                properties:
-                  date:
-                    type: string
-                    format: date
-                  available_slots:
-                    type: integer
-                  reserved_slots:
-                    type: integer
-                  total_slots:
-                    type: integer
-            by_showtime:
-              type: array
-              items:
-                type: object
-                properties:
-                  showtime_id:
-                    type: string
-                  showtime_code:
-                    type: string
-                  available_slots:
-                    type: integer
-                  reserved_slots:
-                    type: integer
-                  total_slots:
-                    type: integer
-                  pricing:
-                    type: object
-                    properties:
-                      base_price:
-                        type: number
-                        format: double
-                      currency:
-                        type: string
-    InventorySlotDetailResponse:
-      type: object
-      properties:
-        status:
-          type: object
-          properties:
-            code:
-              type: string
-              example: INV20003
-            message:
-              type: string
-              example: Inventory slot details successfully retrieved
-        data:
-          type: object
-          properties:
-            slot_id:
-              type: string
-            location_id:
-              type: string
-              format: uuid
-            showtime_id:
-              type: string
-            date:
-              type: string
-              format: date
-            start_time:
-              type: string
-            end_time:
-              type: string
-            timezone:
-              type: string
-            slot_duration_seconds:
-              type: integer
-              example: 30
-            available:
-              type: boolean
-            reserved:
-              type: boolean
-            reservation_id:
-              type: string
-              nullable: true
-            created_at:
-              type: string
-              format: date-time
-            updated_at:
-              type: string
-              format: date-time
+            $ref: "#/components/schemas/CampaignStatusResponse"
     HealthResponse:
       type: object
       properties:
@@ -3206,38 +1729,12 @@ components:
               type: string
               enum:
                 - HEALTHY
-                - DEGRADED
                 - UNHEALTHY
-              example: HEALTHY
-            components:
-              type: object
-              properties:
-                database:
-                  type: string
-                  enum:
-                    - CONNECTED
-                    - DISCONNECTED
-                mqtt_broker:
-                  type: string
-                  enum:
-                    - CONNECTED
-                    - DISCONNECTED
-                storage:
-                  type: string
-                  enum:
-                    - ACCESSIBLE
-                    - INACCESSIBLE
-                api_gateway:
-                  type: string
-                  enum:
-                    - OPERATIONAL
-                    - DEGRADED
-            last_checked:
+            uptime_seconds:
+              type: integer
+            last_check:
               type: string
               format: date-time
-            uptime_percentage:
-              type: number
-              format: double
     MqttHealthResponse:
       type: object
       properties:
@@ -3249,7 +1746,7 @@ components:
               example: HLT20001
             message:
               type: string
-              example: MQTT broker status retrieved
+              example: MQTT health status retrieved
         data:
           type: object
           properties:
@@ -3260,9 +1757,9 @@ components:
                 - DISCONNECTED
             broker_url:
               type: string
-            connection_count:
+            connected_clients:
               type: integer
-            last_connected:
+            last_check:
               type: string
               format: date-time
     DeviceHealthSummaryResponse:
@@ -3280,34 +1777,16 @@ components:
         data:
           type: object
           properties:
-            summary:
-              type: object
-              properties:
-                total_devices:
-                  type: integer
-                online_devices:
-                  type: integer
-                offline_devices:
-                  type: integer
-                healthy_devices:
-                  type: integer
-                unhealthy_devices:
-                  type: integer
-            by_location:
-              type: array
-              items:
-                type: object
-                properties:
-                  location_id:
-                    type: string
-                  online:
-                    type: integer
-                  offline:
-                    type: integer
-                  healthy:
-                    type: integer
-                  unhealthy:
-                    type: integer
+            total_devices:
+              type: integer
+            online_devices:
+              type: integer
+            offline_devices:
+              type: integer
+            healthy:
+              type: integer
+            unhealthy:
+              type: integer
     StorageHealthResponse:
       type: object
       properties:
@@ -3330,206 +1809,550 @@ components:
                 - INACCESSIBLE
             storage_provider:
               type: string
-              example: AWS S3
             region:
               type: string
-              example: ap-southeast-1
             last_access:
               type: string
               format: date-time
             response_time_ms:
               type: integer
+    Address:
+      type: object
+      properties:
+        address_1:
+          type: string
+        address_2:
+          type: string
+        city:
+          type: string
+        post_code:
+          type: string
+        phone:
+          type: string
+        fax:
+          type: string
+        mobile_number:
+          type: string
+        web:
+          type: string
+    ContactPerson:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+    AgencyDetails:
+      type: object
+      properties:
+        npwp:
+          type: string
+        bank_account:
+          type: string
+        bank_name:
+          type: string
+    OtherInfo:
+      type: object
+      properties:
+        notes:
+          type: string
+    CreateAgencyRequest:
+      type: object
+      required:
+        - agency_code
+        - agency_name
+        - agency_type
+        - status
+      properties:
+        agency_code:
+          type: string
+        agency_name:
+          type: string
+        agency_type:
+          type: string
+          enum:
+            - Regular
+            - Premium
+        status:
+          type: string
+          enum:
+            - Draft
+            - Active
+            - Inactive
+        commercial_address:
+          $ref: "#/components/schemas/Address"
+        tax_address:
+          $ref: "#/components/schemas/Address"
+        contact_person:
+          $ref: "#/components/schemas/ContactPerson"
+        other_info:
+          $ref: "#/components/schemas/OtherInfo"
+        details:
+          $ref: "#/components/schemas/AgencyDetails"
+    CreateAgencyResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: AGY20000
+            message:
+              type: string
+              example: Agency created successfully
+        data:
+          type: object
+          properties:
+            agency_id:
+              type: string
+              format: uuid
+            agency_code:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+    UpdateAgencyRequest:
+      type: object
+      properties:
+        agency_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - Draft
+            - Active
+            - Inactive
+            - Cancelled
+        commercial_address:
+          $ref: "#/components/schemas/Address"
+        tax_address:
+          $ref: "#/components/schemas/Address"
+        contact_person:
+          $ref: "#/components/schemas/ContactPerson"
+        other_info:
+          $ref: "#/components/schemas/OtherInfo"
+        details:
+          $ref: "#/components/schemas/AgencyDetails"
+    UpdateAgencyResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: AGY20001
+            message:
+              type: string
+              example: Agency updated successfully
+        data:
+          type: object
+          properties:
+            agency_id:
+              type: string
+              format: uuid
+            updated_at:
+              type: string
+              format: date-time
+    DeleteAgencyResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: AGY20002
+            message:
+              type: string
+              example: Agency deleted successfully
+        data:
+          type: object
+          properties:
+            agency_id:
+              type: string
+              format: uuid
+            deleted_at:
+              type: string
+              format: date-time
+    Agency:
+      type: object
+      properties:
+        agency_id:
+          type: string
+          format: uuid
+        agency_code:
+          type: string
+        agency_name:
+          type: string
+        agency_type:
+          type: string
+          enum:
+            - Regular
+            - Premium
+        status:
+          type: string
+          enum:
+            - Draft
+            - Active
+            - Inactive
+            - Cancelled
+        bill_to:
+          type: string
+        last_update:
+          type: string
+          format: date-time
+        commercial_address:
+          $ref: "#/components/schemas/Address"
+        tax_address:
+          $ref: "#/components/schemas/Address"
+        contact_person:
+          $ref: "#/components/schemas/ContactPerson"
+        other_info:
+          $ref: "#/components/schemas/OtherInfo"
+        details:
+          $ref: "#/components/schemas/AgencyDetails"
+    AgencySummary:
+      type: object
+      properties:
+        agency_id:
+          type: string
+          format: uuid
+        agency_code:
+          type: string
+        agency_name:
+          type: string
+        agency_type:
+          type: string
+          enum:
+            - Regular
+            - Premium
+        status:
+          type: string
+          enum:
+            - Draft
+            - Active
+            - Inactive
+            - Cancelled
+        last_update:
+          type: string
+          format: date-time
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+    AgenciesListResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: AGY20004
+            message:
+              type: string
+              example: Agencies list retrieved successfully
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgencySummary"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    PlaylistMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        page_count:
+          type: integer
+        total_count:
+          type: integer
+    PlaylistVideoItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+    CreatePlaylistRequest:
+      type: object
+      required:
+        - name
+        - channel_id
+        - playlist_type
+      properties:
+        name:
+          type: string
+        channel_id:
+          type: string
+          format: uuid
+        on_air_schedule:
+          type: string
+          description: "On-air schedule (format: YYYY-MM-DD HH:mm:ss)"
+        loop_enabled:
+          type: boolean
+          default: false
+        playlist_type:
+          type: string
+          enum:
+            - OFFLINE
+            - ONLINE
+        playlist_video:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaylistVideoItem"
+    UpdatePlaylistRequest:
+      type: object
+      required:
+        - id
+        - name
+        - channel_id
+        - playlist_type
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        channel_id:
+          type: string
+          format: uuid
+        on_air_schedule:
+          type: string
+          description: "On-air schedule (format: YYYY-MM-DD HH:mm:ss)"
+        loop_enabled:
+          type: boolean
+        playlist_type:
+          type: string
+          enum:
+            - OFFLINE
+            - ONLINE
+        playlist_video:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaylistVideoItem"
+    CreatePlaylistResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "000000"
+            message:
+              type: string
+              example: "success"
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+    DeletePlaylistResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "000000"
+            message:
+              type: string
+              example: "success"
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "success delete playlist with id 770e8400-e29b-41d4-a716-446655440003"
+    GetAllPlaylistItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        channel_name:
+          type: string
+        air_date:
+          type: string
+          format: date
+        air_time:
+          type: string
+        duration:
+          type: integer
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - PENDING_PRODUCTION
+            - REJECTED_PRODUCTION
+            - PRODUCTION
+            - PENDING_BROADCAST_READY
+            - REJECTED_BROADCAST_READY
+            - BROADCAST_READY
+            - APPROVE
+            - REJECT
+        is_looping:
+          type: boolean
+        approved_by:
+          type: string
+        is_playing:
+          type: boolean
+    GetAllPlaylistsResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "000000"
+            message:
+              type: string
+              example: "success"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/GetAllPlaylistItem"
+        meta:
+          $ref: "#/components/schemas/PlaylistMeta"
+    VideoInPlaylist:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        show_times:
+          type: string
+        end_show_times:
+          type: string
+        upload_path:
+          type: string
+        thumbnail_url:
+          type: string
+        video_type:
+          type: string
+        status:
+          type: string
+        duration:
+          type: integer
+        is_deleted:
+          type: boolean
+    FindPlaylistByIdData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        playlist_name:
+          type: string
+        channel_name:
+          type: string
+        channel_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        showtime:
+          type: string
+        duration:
+          type: integer
+        created_by:
+          type: string
+        loop_enabled:
+          type: boolean
+        video_list:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoInPlaylist"
+        action_approval:
+          type: boolean
+    FindPlaylistByIdResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "000000"
+            message:
+              type: string
+              example: "success"
+        data:
+          $ref: "#/components/schemas/FindPlaylistByIdData"
   responses:
     BadRequest:
-      description: |
-        Invalid request payload. Can originate from:
-        - **KrakenD Gateway**: Missing HMAC auth params
-        - **Service**: Invalid JSON body or missing required fields
+      description: Invalid request payload
       content:
         application/json:
           schema:
-            oneOf:
-              - $ref: "#/components/schemas/GatewayErrorResponse"
-              - $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            gateway:
-              summary: KrakenD Gateway Error
-              value:
-                error: missing channel_id
-            service:
-              summary: Service Error
-              value:
-                status:
-                  code: MST40002
-                  message: Invalid request payload
+            type: object
+            properties:
+              error:
+                type: string
     Unauthorized:
-      description: |
-        Authentication failed. Can originate from:
-        - **KrakenD Gateway**: Invalid HMAC signature, expired timestamp, or unknown credentials
-        - **Service**: Invalid or expired session (if applicable)
+      description: Authentication failed
       content:
         application/json:
           schema:
-            oneOf:
-              - $ref: "#/components/schemas/GatewayErrorResponse"
-              - $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            gatewayInvalidCredentials:
-              summary: KrakenD - Invalid Credentials
-              value:
-                error: invalid credentials
-            gatewayRequestExpired:
-              summary: KrakenD - Request Expired
-              value:
-                error: request expired
-            gatewayInvalidSignature:
-              summary: KrakenD - Invalid Signature
-              value:
-                error: invalid signature
-            service:
-              summary: Service Error
-              value:
-                status:
-                  code: MST40101
-                  message: Unauthorized
-    Forbidden:
-      description: |
-        Endpoint not authorized. Originates from KrakenD Gateway when the channel's `allowed_endpoints` does not include the requested path.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/GatewayErrorResponse"
-          example:
-            error: endpoint not authorized
+            type: object
+            properties:
+              error:
+                type: string
     NotFound:
-      description: |
-        Resource not found. Originates from the Patricia service.
+      description: Resource not found
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            locationNotFound:
-              summary: Location Not Found
-              value:
-                status:
-                  code: MST40401
-                  message: Location not found
-            organizationNotFound:
-              summary: Organization Not Found
-              value:
-                status:
-                  code: ORG40401
-                  message: Organization not found
-            deviceNotFound:
-              summary: Device Not Found
-              value:
-                status:
-                  code: DEV40401
-                  message: Device not found
-            campaignNotFound:
-              summary: Campaign Not Found
-              value:
-                status:
-                  code: CMP40402
-                  message: Campaign not found
-            showtimeNotFound:
-              summary: Showtime Not Found
-              value:
-                status:
-                  code: SHW40401
-                  message: Showtime category not found
-            rateCardNotFound:
-              summary: Rate Card Not Found
-              value:
-                status:
-                  code: RTC40401
-                  message: Rate card not found
-            slotNotFound:
-              summary: Inventory Slot Not Found
-              value:
-                status:
-                  code: INV40401
-                  message: Inventory slot not found
+            type: object
+            properties:
+              error:
+                type: string
     Conflict:
-      description: |
-        Duplicate conflict. Originates from the Patricia service.
+      description: Duplicate conflict
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            duplicateOrganization:
-              summary: Duplicate Organization
-              value:
-                status:
-                  code: ORG40901
-                  message: Duplicate organization
-            duplicateDevice:
-              summary: Duplicate Device
-              value:
-                status:
-                  code: DEV40901
-                  message: Duplicate device
-            duplicateCampaign:
-              summary: Duplicate Campaign
-              value:
-                status:
-                  code: CMP40901
-                  message: Duplicate campaign
-            campaignAlreadyCompleted:
-              summary: Campaign Already Completed or Cancelled
-              value:
-                status:
-                  code: CMP40902
-                  message: Campaign already completed or cancelled
+            type: object
+            properties:
+              error:
+                type: string
     ValidationError:
-      description: |
-        Business validation failed. Originates from the Patricia service.
+      description: Business validation failed
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            masterData:
-              summary: Master Data Validation Failed
-              value:
-                status:
-                  code: MST42201
-                  message: Validation failed
-            campaign:
-              summary: Campaign Validation Failed
-              value:
-                status:
-                  code: CMP42201
-                  message: Business validation failed
+            type: object
+            properties:
+              error:
+                type: string
     InternalError:
-      description: |
-        Internal server error. Can originate from:
-        - **KrakenD Gateway**: Upstream service unreachable
-        - **Service**: Database failure, internal processing error
+      description: Internal server error
       content:
         application/json:
           schema:
-            oneOf:
-              - $ref: "#/components/schemas/GatewayErrorResponse"
-              - $ref: "#/components/schemas/ServiceErrorResponse"
-          examples:
-            service:
-              summary: Service Error
-              value:
-                status:
-                  code: MST50001
-                  message: Database query failed
-            mqttUnreachable:
-              summary: MQTT Broker Unreachable
-              value:
-                status:
-                  code: HLT50002
-                  message: MQTT broker unreachable
-            storageInaccessible:
-              summary: Storage Inaccessible
-              value:
-                status:
-                  code: HLT50003
-                  message: Storage inaccessible
+            type: object
+            properties:
+              error:
+                type: string
